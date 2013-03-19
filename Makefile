@@ -6,7 +6,7 @@ TARGETS = qvm
 
 VPATH = sexp/lib
 INCPATH = -I./sexp/include -I./
-LIBPATH = #-L./sexp/lib
+LIBPATH = -L./sexp/lib
 LIBS = -lsexp -lquantum
 OFLAGS = -O2 -Wall #-O2
 DFLAGS = # -g3
