@@ -1,4 +1,4 @@
-struct qu_reg
+struct qu_reg_struct
 {
   COMPLEX_FLOAT* amplitudes; 
   size_t size;      
@@ -6,7 +6,7 @@ struct qu_reg
 
 quantum_reg quantum_new_reg(MAX_UNSIGNED initval, int size);
 void quantum_delete_qureg(quantum_reg *reg);
-
+void quantum_copy_qureg(quantum_reg *src, quantum_reg dst*);
 quantum_reg quantum_kronecker(quantum_reg *reg1, quantum_reg *reg2);
 
 
