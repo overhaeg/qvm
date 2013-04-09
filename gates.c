@@ -3,7 +3,8 @@
 #include <assert.h>
 #include <string.h>
 
-typedef unsigned int uint;
+#include "qureg_dense.h"
+#include "config.h"
 
 // Arguments:
 //  -    i: any integer 0 <= i < size
@@ -61,16 +62,7 @@ uint alt2_permute(const uint i, const uint npos, const uint nsize) {
   printf( " %u }\n\n", test_result[15] )          \
 
 
-/*************************************************/
-/* simple dense amplitude vector quantum example */
-
-// 4-qubit state ==> 2^4 = 16 amplitudes
-typedef struct qureg {
-  uint amplitudes[16];
-  size_t size;
-} qureg_t;
-
-void base_quantum_X(const qureg_t * const input, qureg_t *output) {
+void base_quantum_X(const quantum_reg * const input, quantum_reg *output) {
   int i;
   for( i=0; i<input->size; i+=2 ) {
     output->amplitudes[i+1] = input->amplitudes[i];
@@ -79,12 +71,11 @@ void base_quantum_X(const qureg_t * const input, qureg_t *output) {
 }
 
 // qubit_position here can be 1 (0b0001), 2 (0b0010), 4 (0b0100) or 8 (0b1000)
-void general_quantum_X(const qureg_t * const input, qureg_t *output, uint qubit_position) {
+void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
   int i, p_i;
-  qureg_t permuted_input, permuted_output;
   const size_t size = input->size;
-  permuted_input.size = size;
-  permuted_output.size = size;
+  quantum_reg permuted_input = quantum_new_qureg(1, size); 
+  quantum_reg permuted_output = quantum_new_qureg(1, size);
 
   // permute the input amplitudes
   for( i=0; i<size; ++i ) {
@@ -106,7 +97,7 @@ void general_quantum_X(const qureg_t * const input, qureg_t *output, uint qubit_
 void print_array(const char* name, const uint * const array, size_t size) {
   int i;
   printf("\t%s:\t\t\t { ", name);
-  for( i=0; i<size-2; ++i )
+  for( i=0; i<size-1; ++i )
     printf("%u, ", array[i]);
   printf("%u }\n\n", array[size-1]);
 }
@@ -123,8 +114,9 @@ int main( int argc, char* argv[] ) {
   
 
   printf("\ntesting the quantum ops:\n");
-  qureg_t output, input = {{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, 16};
-  output.size = 16;
+  quantum_reg input = quantum_new_qureg(1,16); 
+  quantum_reg output = quantum_new_qureg(1, 16);
+  input.amplitudes = test_input;
 
   base_quantum_X( &input, &output);
   print_array( "after basic X", output.amplitudes, 16 ); 

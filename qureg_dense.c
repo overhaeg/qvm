@@ -65,3 +65,4 @@ quantum_kronecker (quantum_reg *reg1, quantum_reg *reg2)
    return reg;
 
 }
+
