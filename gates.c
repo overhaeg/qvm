@@ -92,15 +92,13 @@ void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uin
   }
 }
 
-void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position)   
-{
+void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
 
-   int p_i = perm
-
- 
-}	}
+output->amplitudes = input->amplitudes;
 
 
+}
+  
 /*************************************************/
 
 void print_array(const char* name, const uint * const array, size_t size) {
@@ -113,25 +111,25 @@ void print_array(const char* name, const uint * const array, size_t size) {
 
 int main( int argc, char* argv[] ) {
   uint i, p_i;
-  uint test_input[16]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-  uint test_result[16];
+  uint test_input[32]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  uint test_result[32];
 
   printf("\ntesting the permutation functions on vector {0,1,..,15}\n");
-  RUN_TEST(      permute(i, 2, 16) );
-  RUN_TEST(  alt_permute(i, 2, 16) );
-  RUN_TEST( alt2_permute(i, 1,  4) );
+  RUN_TEST(      permute(i, 2, 32) );
+  RUN_TEST(  alt_permute(i, 2, 32) );
+  RUN_TEST( alt2_permute(i, 2,  4) );
   
   for(i = 0; i<16, i++) 
   printf("\n testing permute(%u, 2, 16)=%u", permute(i,2,16);
 
 
   printf("\ntesting the quantum ops:\n");
-  quantum_reg input = quantum_new_qureg(1,16); 
-  quantum_reg output = quantum_new_qureg(1, 16);
+  quantum_reg input = quantum_new_qureg(1,32); 
+  quantum_reg output = quantum_new_qureg(1,32);
   input.amplitudes = test_input;
 
   base_quantum_X( &input, &output);
-  print_array( "after basic X", output.amplitudes, 16 ); 
+  print_array( "after basic X", output.amplitudes, 32 ); 
 
   general_quantum_X( &input, &output, 2);
   print_array( "after X_2", output.amplitudes, 16 );
