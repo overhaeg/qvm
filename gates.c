@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <assert.h>
 #include <string.h>
@@ -73,9 +74,9 @@ void base_quantum_X(const quantum_reg * const input, quantum_reg *output) {
 // qubit_position here can be 1 (0b0001), 2 (0b0010), 4 (0b0100) or 8 (0b1000)
 void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
   int i, p_i;
-  const size_t size = input->size;
-  quantum_reg permuted_input = quantum_new_qureg(1, size); 
-  quantum_reg permuted_output = quantum_new_qureg(1, size);
+  const int size = input->size;
+  quantum_reg permuted_input = quantum_new_qureg(size); 
+  quantum_reg permuted_output = quantum_new_qureg(size);
 
   // permute the input amplitudes
   for( i=0; i<size; ++i ) {
@@ -119,13 +120,13 @@ int main( int argc, char* argv[] ) {
   RUN_TEST(  alt_permute(i, 2, 32) );
   RUN_TEST( alt2_permute(i, 2,  4) );
   
-  for(i = 0; i<16, i++) 
-  printf("\n testing permute(%u, 2, 16)=%u", permute(i,2,16);
-
+  for(i = 0; i<16; i++){ 
+  printf("\n testing permute(%u, 2, 16)=%u", i, permute(i,2,16));
+}
 
   printf("\ntesting the quantum ops:\n");
-  quantum_reg input = quantum_new_qureg(1,32); 
-  quantum_reg output = quantum_new_qureg(1,32);
+  quantum_reg input = quantum_new_qureg(32); 
+  quantum_reg output = quantum_new_qureg(32);
   input.amplitudes = test_input;
 
   base_quantum_X( &input, &output);
