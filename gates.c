@@ -91,7 +91,16 @@ void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uin
     output->amplitudes[p_i] = permuted_output.amplitudes[i];
   }
 }
-  
+
+void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position)   
+{
+
+   int p_i = perm
+
+ 
+}	}
+
+
 /*************************************************/
 
 void print_array(const char* name, const uint * const array, size_t size) {
@@ -112,6 +121,9 @@ int main( int argc, char* argv[] ) {
   RUN_TEST(  alt_permute(i, 2, 16) );
   RUN_TEST( alt2_permute(i, 1,  4) );
   
+  for(i = 0; i<16, i++) 
+  printf("\n testing permute(%u, 2, 16)=%u", permute(i,2,16);
+
 
   printf("\ntesting the quantum ops:\n");
   quantum_reg input = quantum_new_qureg(1,16); 
