@@ -602,7 +602,7 @@ double parse_angle( const sexp_t* exp ) {
 /************************
  ** QUANTUM OPERATIONS **
  ************************/
-
+/*
 static inline unsigned int
 quantum_hash64(MAX_UNSIGNED key, int width)
 {
@@ -637,7 +637,7 @@ quantum_get_state(MAX_UNSIGNED a, quantum_reg reg)
   
   return -1;   
 }
-/* Add an element to the hash table */
+/* Add an element to the hash table *
 
 static inline void
 quantum_add_hash(MAX_UNSIGNED a, int pos, quantum_reg *reg)
@@ -665,14 +665,14 @@ quantum_add_hash(MAX_UNSIGNED a, int pos, quantum_reg *reg)
 
 }
 
-/* Reconstruct hash table */
+/* Reconstruct hash table *
 
 static inline void
 quantum_reconstruct_hash(quantum_reg *reg)
 {
   int i;
 
-  /* Check whether register is sorted */
+  /* Check whether register is sorted *
 
   if(!reg->hashw)
     return;
@@ -682,6 +682,8 @@ quantum_reconstruct_hash(quantum_reg *reg)
   for(i=0; i<reg->size; i++)
     quantum_add_hash(reg->node[i].state, i, reg);
 }
+
+*/
 
 int
 quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
@@ -986,11 +988,10 @@ void eval_M(sexp_t* exp, qmem_t* qmem) {
   
   //  quantum_inv_phase_kick( get_target(qubit), angle, get_qureg(qubit) );
 
-  if( _alt_measure_ )
+  //if( _alt_measure_ )
     signal = quantum_diag_measure( get_target(qubit), 
-				   angle,
-				   get_qureg(qubit) );
-  else {
+				   angle,get_qureg(qubit) );
+  /*else {
     quantum_phase_kick( get_target(qubit), -angle, get_qureg( qubit ) );
   
     //printf("   after kick: \n");
@@ -1004,6 +1005,7 @@ void eval_M(sexp_t* exp, qmem_t* qmem) {
 
     //signal = quantum_diag_measure( get_target(qubit), angle, get_qureg(qubit) );
   }
+  */
     /* quantum_hadamard( get_target(qubit), get_qureg( qubit ) ); */
   /* quantum_phase_kick( get_target(qubit), angle, get_qureg( qubit ) ); */
 
