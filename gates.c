@@ -94,11 +94,32 @@ void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uin
 }
 
 void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
-
-output->amplitudes = input->amplitudes;
+  
+  uint i, p_i;    
+  const int size = output->size;
+  for ( i=0; i<size; i++) {
+      p_i = permute(i, qubit_position, size);
+      if (p_i % 2 == 1) {
+          output->amplitudes[i] = input->amplitudes[i] * -1;
+      }
+      else { output->amplitudes[i] = input->amplitudes[i];}
+  }
 
 
 }
+
+void general_quantum_CZ(int tar1, int tar2, quantum_reg * qureg) {
+  int i;  
+  MAX_UNSIGNED bitmask = 
+    ((MAX_UNSIGNED) 1 << tar1) | ((MAX_UNSIGNED) 1 << tar2);
+  for(i=0; i<qureg->size; i++)
+    {
+      /* Flip the target bit of a basis state if the control bit is set */     
+      if((i & bitmask) == bitmask)
+	qureg->amplitudes[i] *= (COMPLEX_FLOAT)-1;
+    }
+}
+
   
 /*************************************************/
 
@@ -112,34 +133,51 @@ void print_array(const char* name, const uint * const array, size_t size) {
 
 int main( int argc, char* argv[] ) {
   uint i, p_i;
-  uint test_input[32]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
-  uint test_result[32];
+  uint test_input[16]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  uint test_result[16];
 
   printf("\ntesting the permutation functions on vector {0,1,..,15}\n");
-  RUN_TEST(      permute(i, 2, 32) );
-  RUN_TEST(  alt_permute(i, 2, 32) );
+  RUN_TEST(      permute(i, 4, 16) );
+  RUN_TEST(  alt_permute(i, 4, 16 ));
   RUN_TEST( alt2_permute(i, 2,  4) );
   
-  for(i = 0; i<16; i++){ 
-  printf("\n testing permute(%u, 2, 16)=%u", i, permute(i,2,16));
-}
+
+  COMPLEX_FLOAT complex_input[16] =  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
   printf("\ntesting the quantum ops:\n");
-  quantum_reg input = quantum_new_qureg(32); 
-  quantum_reg output = quantum_new_qureg(32);
-  input.amplitudes = test_input;
+  quantum_reg input = quantum_new_qureg(16); 
+  quantum_reg output = quantum_new_qureg(16);
+  input.amplitudes = complex_input;
 
+  printf("\n X \n");
   base_quantum_X( &input, &output);
-  print_array( "after basic X", output.amplitudes, 32 ); 
-
+  quantum_print_qureg(output); 
+  
   general_quantum_X( &input, &output, 2);
-  print_array( "after X_2", output.amplitudes, 16 );
+  quantum_print_qureg(output); 
 
   general_quantum_X( &input, &output, 4);
-  print_array( "after X_4", output.amplitudes, 16 );
+  quantum_print_qureg(output); 
 
   general_quantum_X( &input, &output, 8);
-  print_array( "after X_8", output.amplitudes, 16 );
-    
+  quantum_print_qureg(output); 
+ 
+  printf("\n Z \n");
+      
+  general_quantum_Z( &input, &output, 2);
+  quantum_print_qureg(output); 
+
+  general_quantum_Z( &input, &output, 4);
+  quantum_print_qureg(output);
+
+  general_quantum_Z( &input, &output, 8);
+  quantum_print_qureg(output);
+
+  printf("\n CZ \n");
+ 
+  general_quantum_CZ(2, 2, &input);
+  quantum_print_qureg(input);
+
+  
   return 0;
 }
