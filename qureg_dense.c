@@ -14,15 +14,18 @@ unsigned long quantum_memman(long change)
 }
 
 quantum_reg 
-quantum_new_qureg (int size)
+quantum_new_qureg ( int size)
 {
     quantum_reg reg;
     
     /*Allocate memory*/
-
-    reg.amplitudes = calloc(size, sizeof(COMPLEX_FLOAT));
+    int i;
+    COMPLEX_FLOAT one = 1;
+    reg.amplitudes = malloc(size * sizeof(COMPLEX_FLOAT));
+    for (i = 0; i<size; i++)
+	    reg.amplitudes[i] = one;
     reg.size = size;
-    //quantum_memman(size * sizeof(COMPLEX_FLOAT));
+    quantum_memman(size * sizeof(COMPLEX_FLOAT));
 
     return reg;
 

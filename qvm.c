@@ -690,32 +690,32 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
 {
   //int result=0;
   //int value=0;
-  quantum_reg out;
+  quantum_reg out = quantum_new_qureg(reg->size);
   MAX_UNSIGNED pos2 = (MAX_UNSIGNED) 1 << pos;
   double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->width)) / 1000000;
   double prob=0, norm = 0;
   COMPLEX_FLOAT amp = 0;
 
   // TODO: currently just measures to <+_alpha|
-  out.width = reg->width-1;
-  out.size = reg->size;
-  out.node = calloc(reg->size, sizeof(quantum_reg_node));
+ // out.width = reg->width-1;
+  //out.size = reg->size;
+  //out.node = calloc(reg->size, sizeof(quantum_reg_node));
   //quantum_memman(size * sizeof(quantum_reg_node));
-  out.hashw = reg->hashw;
-  out.hash = reg->hash;
+  //out.hashw = reg->hashw;
+  //out.hash = reg->hash;
   
-  for( int i=0 ; i<reg->size ; ++i ) {
+ // for( int i=0 ; i<reg->size ; ++i ) {
     //    quantum_prob_inline( reg->node[i].ampl
-  }
+ // }
 
-  if(reg->hashw)
-    quantum_reconstruct_hash(reg);
+  //if(reg->hashw)
+   // quantum_reconstruct_hash(reg);
 
   /* METHOD 1:
       loop through all collapsed basis and lookup the two contributing
       amplitudes.
       should have really rubbish cache usage
-   */
+   
 
   typedef unsigned int basis;
   basis upper_mask = ((basis)(-1/pos2))*pos2;
@@ -756,20 +756,23 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
       quantum_error(QUANTUM_ENOMEM);
   }
   // normalize, turned off
+  */
   /* norm = sqrt(norm); */
   /* if( abs(1-norm) > limit ) */
   /*   for( int i=0; i<out.size; ++i ) */
   /*     out.node[i].amplitude /= norm; */
   
-  quantum_delete_qureg_hashpreserve(reg);
-  *reg = out;
-  return 1;
+ // quantum_delete_qureg_hashpreserve(reg);
+ //*reg = out;
+ // return 1;
 
 
   /* METHOD 2: suggestion
       loop through all amplitudes
       
   */
+
+
 
 }
 
