@@ -1,9 +1,14 @@
 #ifndef QVM_H
 #define QVM_H
 
-#include "libquantum/complex.h"
-#include "libquantum/error.h"
-#include <quantum.h>
+//#include "libquantum/complex.h"
+//#include "libquantum/error.h"
+//#include <quantum.h>
+
+#include "config.h"
+#include "complex.h"
+#include "qureg_dense.h"
+#include "gates.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

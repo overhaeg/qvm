@@ -1,5 +1,6 @@
 #include "qureg_dense.h"
 
+typedef unsigned int uint;
 
 unsigned long quantum_memman(long change)
 {

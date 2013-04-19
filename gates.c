@@ -4,8 +4,11 @@
 #include <assert.h>
 #include <string.h>
 
+
+typedef unsigned int uint;
+
 #include "qureg_dense.h"
-#include "config.h"
+//#include "config.h"
 
 // Arguments:
 //  -    i: any integer 0 <= i < size
@@ -49,7 +52,7 @@ uint alt2_permute(const uint i, const uint npos, const uint nsize) {
 }
 
 
-
+/*
 #define RUN_TEST( FUNCALL ) \
   memset(test_result, 0, sizeof(test_result));  \
   for( i=0; i<16; ++i ) {                       \
@@ -62,7 +65,7 @@ uint alt2_permute(const uint i, const uint npos, const uint nsize) {
   }                                             \
   printf( " %u }\n\n", test_result[15] )          \
 
-
+*/
 void base_quantum_X(const quantum_reg * const input, quantum_reg *output) {
   int i;
   for( i=0; i<input->size; i+=2 ) {
@@ -121,7 +124,7 @@ void general_quantum_CZ(int tar1, int tar2, quantum_reg * qureg) {
 }
 
   
-/*************************************************/
+/*************************************************
 
 void print_array(const char* name, const uint * const array, size_t size) {
   int i;
@@ -181,3 +184,5 @@ int main( int argc, char* argv[] ) {
   
   return 0;
 }
+
+*/

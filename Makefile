@@ -1,13 +1,13 @@
 CC = gcc
 
-SOURCES = qvm.c
+SOURCES = qvm.c qureg_dense.c gates.c complex.c
 
 TARGETS = qvm
 
 VPATH = sexp/lib
 INCPATH = -I./sexp/include -I./
 LIBPATH = -L./sexp/lib
-LIBS = -lsexp -lquantum
+LIBS = -lsexp -lm #-lquantum 
 OFLAGS = -O2 -Wall #-O2
 DFLAGS = # -g3
 CFLAGS = $(OFLAGS) $(DFLAGS) $(INCPATH) $(LIBPATH) -std=c99

@@ -14,7 +14,7 @@
 #include <sexp.h>
 #include <sexp_ops.h>
 #include <sexp_vis.h>
-#include <quantum.h>
+//#include <quantum.h>
 
 
 //#include "libquantum/config.h"
@@ -35,12 +35,13 @@ int _verbose_ = 0;
 int _alt_measure_ = 0;
 quantum_reg _proto_diag_qubit_;
 quantum_reg _proto_dual_diag_qubit_;
-  quantum_matrix _cz_gate_ = 
+/*  quantum_matrix _cz_gate_ = 
     { 4,4, (COMPLEX_FLOAT[16]){1,0,0,0,
 			       0,1,0,0,
 			       0,0,1,0,
 			       0,0,0,-1} };
 
+                   */
 /************
  ** TANGLE **
  ************/
@@ -290,13 +291,14 @@ qmem_t* init_qmem() {
   qmem->signal_map = (signal_map_t){{0},{0}};
   
   // instantiate prototypes (libquantum quregs)
-  _proto_diag_qubit_ = quantum_new_qureg(0, 1);
-  _proto_dual_diag_qubit_ = quantum_new_qureg(0, 2);
+  _proto_diag_qubit_ = quantum_new_qureg(1);
+  _proto_dual_diag_qubit_ = quantum_new_qureg(2);
+  /*
   quantum_hadamard(0, &_proto_diag_qubit_);
   quantum_hadamard(0, &_proto_dual_diag_qubit_);
   quantum_hadamard(1, &_proto_dual_diag_qubit_);
   quantum_gate2(0, 1, _cz_gate_, &_proto_dual_diag_qubit_);  
-
+  */
   // seed RNG
   //sranddev();
   srand(time(0));
@@ -665,14 +667,14 @@ quantum_add_hash(MAX_UNSIGNED a, int pos, quantum_reg *reg)
 
 }
 
-/* Reconstruct hash table *
+* Reconstruct hash table *
 
 static inline void
 quantum_reconstruct_hash(quantum_reg *reg)
 {
   int i;
 
-  /* Check whether register is sorted *
+  * Check whether register is sorted *
 
   if(!reg->hashw)
     return;
@@ -692,7 +694,7 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   //int value=0;
   quantum_reg out = quantum_new_qureg(reg->size);
   MAX_UNSIGNED pos2 = (MAX_UNSIGNED) 1 << pos;
-  double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->width)) / 1000000;
+  double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->size)) / 1000000;
   double prob=0, norm = 0;
   COMPLEX_FLOAT amp = 0;
 
@@ -714,7 +716,7 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   /* METHOD 1:
       loop through all collapsed basis and lookup the two contributing
       amplitudes.
-      should have really rubbish cache usage
+      should have really rubbish cache usage */
    
 
   typedef unsigned int basis;
@@ -724,39 +726,41 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   
   basis lpart,rpart;
   int free = 0;
-  for(basis state=0; state<(1 << out.width); ++state ) {
+  for(basis state=0; state<(1 << out.size); ++state ) {
     lpart = upper_mask & state<<1;
     rpart = lower_mask & state;
     basis k = lpart+rpart;
-    int i = quantum_get_state(k, *reg);
-    int j = quantum_get_state(k^pos2, *reg);
+    int i = k^pos2;
     int k_is_odd = k & pos2;
+    if( k >= 0 )
+      amp += k_is_odd ? -(reg->amplitudes[k] * quantum_cexp(-angle))
+	              : reg->amplitudes[k];
     if( i >= 0 )
-      amp += k_is_odd ? -(reg->node[i].amplitude * quantum_cexp(-angle))
-	              : reg->node[i].amplitude;
-    if( j >= 0 )
-      amp += k_is_odd ? reg->node[j].amplitude 
-	              : -(reg->node[j].amplitude * quantum_cexp(-angle));
-    if( i >= 0 || j >= 0 ) {
+      amp += k_is_odd ? reg->amplitudes[i] 
+	              : -(reg->amplitudes[i] * quantum_cexp(-angle));
+    if( i >= 0 || k >= 0 ) {
       prob = quantum_prob_inline( amp );
       if( prob > limit ) {
 	assert(free<out.size);
 	norm += prob;
-	out.node[free].amplitude = amp;
-	out.node[free].state = state;
+	out.amplitudes[free] = amp;
+	out.amplitudes[free] = state;
 	++free;
       }
       amp = 0;
     }
   }
-  out.size = free;
+  /*out.size = free;
   if( out.size != reg->size ) {
     out.node = realloc(out.node, (out.size)*sizeof(quantum_reg_node));
     if(out.node == NULL) 
-      quantum_error(QUANTUM_ENOMEM);
+    quantum_error(QUANTUM_ENOMEM);
+
+    
   }
-  // normalize, turned off
   */
+  // normalize, turned off
+
   /* norm = sqrt(norm); */
   /* if( abs(1-norm) > limit ) */
   /*   for( int i=0; i<out.size; ++i ) */
@@ -781,35 +785,28 @@ void qop_cz( const qubit_t qubit_1, const qubit_t qubit_2 ) {
   const int tar2 = get_target(qubit_2);
   assert( !(invalid(qubit_1) || invalid(qubit_2)) );
   assert( qubit_1.tangle == qubit_2.tangle );
-
-  /* printf("Performing CZ on qubits %d and %d on tangle ",  */
-  /* 	 qubit_1.qid, qubit_2.qid); */
-  /* print_qids( qubit_1.tangle->qids ); */
-  /* printf("\n"); */
-  /* printf("  calling cz with targets %d and %d\n, ", tar1, tar2); */
-
-  // manual cz because a) libquantum's gate2 appears to be bugggy and
-  //  can be implemented optimally relatively easily, similar to cnot
   quantum_reg* reg = get_qureg( qubit_1 );
-  MAX_UNSIGNED bitmask = 
-    ((MAX_UNSIGNED) 1 << tar1) | ((MAX_UNSIGNED) 1 << tar2);
-  for(int i=0; i<reg->size; i++)
-    {
-      /* Flip the target bit of a basis state if the control bit is set */     
-      if((reg->node[i].state & bitmask) == bitmask)
-	reg->node[i].amplitude *= (COMPLEX_FLOAT)-1;
-    }
-  //  quantum_gate2(tar1, tar2, _cz_gate_, get_qureg(qubit_1)); 
+  general_quantum_CZ(tar1, tar2, reg);
+
+  
 }
 
 void qop_x( const qubit_t qubit ) {
   assert( !invalid(qubit) );
-  quantum_sigma_x( get_target(qubit), get_qureg(qubit) );
+  quantum_reg* reg = get_qureg(qubit);
+  quantum_reg new = quantum_new_qureg(reg->size);
+  general_quantum_X(reg, &new, get_target(qubit));
+  qubit.tangle->qureg = new;
+  quantum_delete_qureg(reg);
 }
 
 void qop_z( const qubit_t qubit ) {
   assert( !invalid(qubit) );
-  quantum_sigma_z( get_target(qubit), get_qureg(qubit) );
+  quantum_reg* reg = get_qureg(qubit);
+  quantum_reg new = quantum_new_qureg(reg->size);
+  general_quantum_Z(reg, &new, get_target(qubit));
+  qubit.tangle->qureg = new;
+  quantum_delete_qureg(reg);
 }
 
 /* Apply a phase kick by the angle GAMMA */
@@ -827,8 +824,8 @@ quantum_inv_phase_kick(int target, double gamma, quantum_reg *reg)
   
   for(i=0; i<reg->size; i++)
     {
-      if(reg->node[i].state & ((MAX_UNSIGNED) 1 << target))
-	reg->node[i].amplitude *= z;
+      if(i & ((MAX_UNSIGNED) 1 << target))
+	reg->amplitudes[i] *= z;
     }
 
   printf("\nafter phase kick:\n");
@@ -1195,7 +1192,7 @@ void parse_tangle( const sexp_t* exp, qmem_t* restrict qmem ) {
  
   qmem->size += 1;
   tangle->size = sexp_list_length(qids_exp);
-  tangle->qureg = quantum_new_qureg_size( num_amps, tangle->size  );
+  tangle->qureg = quantum_new_qureg(tangle->size);
   tangle->qids = add_qid( get_qid(qids), tangle->qids );
   while(qids->next) {
     qids=qids->next;
@@ -1205,8 +1202,8 @@ void parse_tangle( const sexp_t* exp, qmem_t* restrict qmem ) {
   quantum_reg* reg = &tangle->qureg;
   sexp_t* amp = amps_exp->list;
   for( int i=0; i<num_amps ;  ++i ) {
-    reg->node[i].state = atoi(amp->list->val);
-    reg->node[i].amplitude = parse_complex(amp->list->next->val);
+      if (i == atoi(amp->list->val))
+            reg->amplitudes[i] = parse_complex(amp->list->next->val);
     amp=amp->next;
   } 
 }
@@ -1252,11 +1249,11 @@ produce_output_file( const char* output_file,
   saddch(out, '(');
   reg = tangle->qureg;
   for( int i=0; i<reg.size; ++i ) {
-    sprintf(str,"(%lli ", reg.node[i].state);
+    sprintf(str,"(%lli ", i);
     sadd(out, str);
     sprintf( str, "% .12g%+.12gi)", 
-	     quantum_real(reg.node[i].amplitude),
-	     quantum_imag(reg.node[i].amplitude) );
+	     quantum_real(reg.amplitudes[i]),
+	     quantum_imag(reg.amplitudes[i]) );
     sadd(out, str);
     if( i+1<reg.size )
       sadd(out, "\n  ");
@@ -1287,11 +1284,11 @@ void quantum_normalize( quantum_reg reg ) {
   double limit = 1.0e-8;
   COMPLEX_FLOAT norm=0;
   for( int i=0; i<reg.size; ++i ) {
-    norm += quantum_prob_inline(reg.node[i].amplitude);
+    norm += quantum_prob_inline(reg.amplitudes[i]);
   }
   if( abs(1-norm) < limit )
     for( int i=0; i<reg.size; ++i ) {
-      reg.node[i].amplitude /= norm;
+      reg.amplitudes[i] /= norm;
     }
 }
 
