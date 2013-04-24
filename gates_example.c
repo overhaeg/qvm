@@ -131,7 +131,7 @@ int main( int argc, char* argv[] ) {
    base_quantum_X( &input, &output);
   print_array( "after basic X", output.amplitudes, 16 ); 
 
-  general_quantum_X( &input, &output, 2);
+  general_quantum_X( &input, &output, 0);
   print_array( "after X_2", output.amplitudes, 16 );
 
   general_quantum_X( &input, &output, 4);

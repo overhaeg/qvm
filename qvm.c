@@ -293,6 +293,7 @@ qmem_t* init_qmem() {
   // instantiate prototypes (libquantum quregs)
   _proto_diag_qubit_ = quantum_new_qureg(1);
   _proto_dual_diag_qubit_ = quantum_new_qureg(2);
+  general_quantum_CZ(0,1,&_proto_dual_diag_qubit_);
   /*
   quantum_hadamard(0, &_proto_diag_qubit_);
   quantum_hadamard(0, &_proto_dual_diag_qubit_);
@@ -301,6 +302,7 @@ qmem_t* init_qmem() {
   */
   // seed RNG
   //sranddev();
+
   srand(time(0));
   return qmem;
 }
@@ -692,7 +694,7 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
 {
   //int result=0;
   //int value=0;
-  quantum_reg out = quantum_new_qureg(reg->size);
+  quantum_reg out = quantum_new_qureg(reg->qubits);
   MAX_UNSIGNED pos2 = (MAX_UNSIGNED) 1 << pos;
   double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->size)) / 1000000;
   double prob=0, norm = 0;
@@ -732,16 +734,17 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
     basis k = lpart+rpart;
     int i = k^pos2;
     int k_is_odd = k & pos2;
-    if( k >= 0 )
+    if( k >= out.size)
       amp += k_is_odd ? -(reg->amplitudes[k] * quantum_cexp(-angle))
 	              : reg->amplitudes[k];
-    if( i >= 0 )
+    if( i >= out.size)
       amp += k_is_odd ? reg->amplitudes[i] 
 	              : -(reg->amplitudes[i] * quantum_cexp(-angle));
-    if( i >= 0 || k >= 0 ) {
+    if( i >= out.size || k >= out.size ) {
       prob = quantum_prob_inline( amp );
       if( prob > limit ) {
-	assert(free<out.size);
+
+    assert(free<out.size);
 	norm += prob;
 	out.amplitudes[free] = amp;
 	out.amplitudes[free] = state;
@@ -766,9 +769,10 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   /*   for( int i=0; i<out.size; ++i ) */
   /*     out.node[i].amplitude /= norm; */
   
- // quantum_delete_qureg_hashpreserve(reg);
- //*reg = out;
- // return 1;
+  quantum_delete_qureg(reg);
+ *reg = out;
+
+ return 1;
 
 
   /* METHOD 2: suggestion
@@ -794,19 +798,19 @@ void qop_cz( const qubit_t qubit_1, const qubit_t qubit_2 ) {
 void qop_x( const qubit_t qubit ) {
   assert( !invalid(qubit) );
   quantum_reg* reg = get_qureg(qubit);
-  quantum_reg new = quantum_new_qureg(reg->size);
+  quantum_reg new = quantum_new_qureg(reg->qubits);
   general_quantum_X(reg, &new, get_target(qubit));
-  qubit.tangle->qureg = new;
-  quantum_delete_qureg(reg);
+  quantum_copy_qureg(&new,reg);
+  quantum_delete_qureg(&new);
 }
 
 void qop_z( const qubit_t qubit ) {
   assert( !invalid(qubit) );
   quantum_reg* reg = get_qureg(qubit);
-  quantum_reg new = quantum_new_qureg(reg->size);
+  quantum_reg new = quantum_new_qureg(reg->qubits);
   general_quantum_Z(reg, &new, get_target(qubit));
-  qubit.tangle->qureg = new;
-  quantum_delete_qureg(reg);
+  quantum_copy_qureg(&new,reg);
+  quantum_delete_qureg(&new);
 }
 
 /* Apply a phase kick by the angle GAMMA */

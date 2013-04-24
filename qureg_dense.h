@@ -7,7 +7,8 @@
 typedef struct qu_reg_struct
 {
   COMPLEX_FLOAT* amplitudes; 
-  size_t size;      
+  size_t size; 
+  int qubits;
 } quantum_reg;
 
 quantum_reg quantum_new_qureg(int size);

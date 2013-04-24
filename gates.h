@@ -1,5 +1,6 @@
 //#include "qureg_dense.h"
 #include "config.h"
+#include "string.h"
 
 typedef unsigned int uint;
 

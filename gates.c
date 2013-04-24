@@ -51,7 +51,6 @@ uint alt2_permute(const uint i, const uint npos, const uint nsize) {
   return upper_part ^ lower_part;
 }
 
-
 /*
 #define RUN_TEST( FUNCALL ) \
   memset(test_result, 0, sizeof(test_result));  \
@@ -64,8 +63,8 @@ uint alt2_permute(const uint i, const uint npos, const uint nsize) {
     printf( " %u,", test_result[i] );           \
   }                                             \
   printf( " %u }\n\n", test_result[15] )          \
-
 */
+
 void base_quantum_X(const quantum_reg * const input, quantum_reg *output) {
   int i;
   for( i=0; i<input->size; i+=2 ) {
@@ -74,8 +73,14 @@ void base_quantum_X(const quantum_reg * const input, quantum_reg *output) {
   }
 }
 
+uint reformat_args(uint i) {
+    return pow(2,i);
+}
+
+
 // qubit_position here can be 1 (0b0001), 2 (0b0010), 4 (0b0100) or 8 (0b1000)
 void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
+  qubit_position = reformat_args(qubit_position);
   int i, p_i;
   const int size = input->size;
   quantum_reg permuted_input = quantum_new_qureg(size); 
@@ -97,7 +102,7 @@ void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uin
 }
 
 void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
-  
+  qubit_position = reformat_args(qubit_position); 
   uint i, p_i;    
   const int size = output->size;
   for ( i=0; i<size; i++) {
@@ -124,7 +129,6 @@ void general_quantum_CZ(int tar1, int tar2, quantum_reg * qureg) {
 }
 
   
-/*************************************************
 
 void print_array(const char* name, const uint * const array, size_t size) {
   int i;
@@ -134,55 +138,77 @@ void print_array(const char* name, const uint * const array, size_t size) {
   printf("%u }\n\n", array[size-1]);
 }
 
+/*
 int main( int argc, char* argv[] ) {
+ 
   uint i, p_i;
   uint test_input[16]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   uint test_result[16];
 
-  printf("\ntesting the permutation functions on vector {0,1,..,15}\n");
-  RUN_TEST(      permute(i, 4, 16) );
-  RUN_TEST(  alt_permute(i, 4, 16 ));
-  RUN_TEST( alt2_permute(i, 2,  4) );
+ // printf("\ntesting the permutation functions on vector {0,1,..,15}\n");
+ // RUN_TEST(      permute(i, 4, 16) );
+ // RUN_TEST(  alt_permute(i, 4, 16 ));
+ // RUN_TEST( alt2_permute(i, 2,  4) );
   
 
-  COMPLEX_FLOAT complex_input[16] =  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  COMPLEX_FLOAT complex_input[4] =  { 0, 1, 2, 3};
+  
 
   printf("\ntesting the quantum ops:\n");
-  quantum_reg input = quantum_new_qureg(16); 
-  quantum_reg output = quantum_new_qureg(16);
+  quantum_reg input = quantum_new_qureg(2); 
+  
+  quantum_reg output = quantum_new_qureg(2);
+  quantum_reg test = quantum_new_qureg(1);
   input.amplitudes = complex_input;
+  general_quantum_CZ(0,1,&input);
+  quantum_reg kronecker_test = quantum_kronecker(&input, &test); 
+  quantum_reg output2 = quantum_new_qureg(kronecker_test.qubits);
+  quantum_print_qureg(input);
+  quantum_print_qureg(output);
+  general_quantum_CZ(0,1,&output);
+  quantum_print_qureg(output);
+
+
+
+  printf("\n Kronecker \n");
+
+  quantum_print_qureg(kronecker_test);
 
   printf("\n X \n");
   base_quantum_X( &input, &output);
   quantum_print_qureg(output); 
   
-  general_quantum_X( &input, &output, 2);
+  general_quantum_X( &input, &output, 0);
+  quantum_print_qureg(output);
+
+  general_quantum_X( &input, &output, 1);
   quantum_print_qureg(output); 
 
-  general_quantum_X( &input, &output, 4);
-  quantum_print_qureg(output); 
+  general_quantum_X( &kronecker_test, &output2, 2);
+  quantum_print_qureg(output2);
 
-  general_quantum_X( &input, &output, 8);
-  quantum_print_qureg(output); 
+  //general_quantum_X( &input, &output, 4);
+  //quantum_print_qureg(output); 
+
+  //general_quantum_X( &input, &output, 8);
+  //quantum_print_qureg(output); 
  
   printf("\n Z \n");
       
-  general_quantum_Z( &input, &output, 2);
+  general_quantum_Z( &input, &output, 1);
   quantum_print_qureg(output); 
+
+  general_quantum_Z( &input, &output, 2);
+  quantum_print_qureg(output);
 
   general_quantum_Z( &input, &output, 4);
   quantum_print_qureg(output);
 
-  general_quantum_Z( &input, &output, 8);
-  quantum_print_qureg(output);
-
   printf("\n CZ \n");
  
-  general_quantum_CZ(2, 2, &input);
+  general_quantum_CZ(0, 1, &input);
   quantum_print_qureg(input);
 
-  
   return 0;
 }
-
 */
