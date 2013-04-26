@@ -694,9 +694,9 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
 {
   //int result=0;
   //int value=0;
-  quantum_reg out = quantum_new_qureg(reg->qubits);
+  quantum_reg out = quantum_new_qureg(reg->qubits-1);
   MAX_UNSIGNED pos2 = (MAX_UNSIGNED) 1 << pos;
-  double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->size)) / 1000000;
+  double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->qubits)) / 1000000;
   double prob=0, norm = 0;
   COMPLEX_FLOAT amp = 0;
 
@@ -728,31 +728,30 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   
   basis lpart,rpart;
   int free = 0;
-  for(basis state=0; state<(1 << out.size); ++state ) {
+  //quantum_print_qureg(*reg);
+  for(basis state=0; state<(1 << out.qubits); ++state ) {
     lpart = upper_mask & state<<1;
     rpart = lower_mask & state;
     basis k = lpart+rpart;
     int i = k^pos2;
     int k_is_odd = k & pos2;
-    if( k >= out.size)
+    if( reg->amplitudes[k] != 0)
       amp += k_is_odd ? -(reg->amplitudes[k] * quantum_cexp(-angle))
 	              : reg->amplitudes[k];
-    if( i >= out.size)
+    if( reg->amplitudes[i] != 0)
       amp += k_is_odd ? reg->amplitudes[i] 
 	              : -(reg->amplitudes[i] * quantum_cexp(-angle));
-    if( i >= out.size || k >= out.size ) {
       prob = quantum_prob_inline( amp );
+     // printf("\n amp = %e, state = %u \n", amp, state);
+     // printf("prob = %e, limit = %e \n", prob, limit);  
       if( prob > limit ) {
-
-    assert(free<out.size);
-	norm += prob;
-	out.amplitudes[free] = amp;
-	out.amplitudes[free] = state;
-	++free;
+	    norm += prob;
+	    out.amplitudes[state] = amp;
       }
+      else out.amplitudes[state] = 0 ;
       amp = 0;
     }
-  }
+  
   /*out.size = free;
   if( out.size != reg->size ) {
     out.node = realloc(out.node, (out.size)*sizeof(quantum_reg_node));
@@ -768,6 +767,8 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
   /* if( abs(1-norm) > limit ) */
   /*   for( int i=0; i<out.size; ++i ) */
   /*     out.node[i].amplitude /= norm; */
+
+  printf("just testing: reg=%u ; out=%u", reg->qubits, out.qubits);
   
   quantum_delete_qureg(reg);
  *reg = out;
