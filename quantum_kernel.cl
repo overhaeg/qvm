@@ -196,12 +196,12 @@ __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
 	              : cadd(amp, -(cmult(input[i],cexp)));
  prob = quantum_prob( amp );
  if( prob > limit ) {
-    COMPLEX_FLOAT test = {k_is_odd, limit};
-	output[global_id] = test;
+   // COMPLEX_FLOAT test = {k_is_odd, limit};
+	output[global_id] = amp;
       }
       else {
-             COMPLEX_FLOAT test = {k_is_odd, rpart};
-             output[global_id] = test;
+             //COMPLEX_FLOAT test = {k_is_odd, rpart};
+             output[global_id] = zero;
       }
 
 }
