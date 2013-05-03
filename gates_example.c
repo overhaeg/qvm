@@ -112,7 +112,7 @@ void print_array(const char* name, const uint * const array, size_t size) {
 }
 
 int main( int argc, char* argv[] ) {
-  uint i, p_i;
+  uint i, j, p_i;
   uint test_input[16]  = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
   uint test_result[16];
 
@@ -120,7 +120,20 @@ int main( int argc, char* argv[] ) {
   RUN_TEST(      permute(i, 2, 16) );
   RUN_TEST(  alt_permute(i, 2, 16) );
   RUN_TEST( alt2_permute(i, 1,  4) );
-  
+ 
+  for(i =0; i<4; i++) {
+   p_i = permute(i, 3, 4);
+   printf("\n blah : %u \n", p_i);
+  }
+
+  for(i = 0; i<4; i++)
+   {
+     int bitmask = (1 << 0) |  (1 << 1);
+     printf("\n blah² : %u ; %u \n", bitmask, bitmask & i);
+   }
+
+
+
 
 
   printf("\ntesting the quantum ops:\n");

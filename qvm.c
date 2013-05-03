@@ -25,6 +25,7 @@
 #define STRING_SIZE (size_t)UCHAR_MAX	
 #define MAX_TANGLES (size_t)SHRT_MAX
 #define MAX_QUBITS  (size_t)SHRT_MAX
+#define MAX_SOURCE_SIZE (0x100000)
 
 #define car hd_sexp
 #define cdr next_sexp
@@ -35,13 +36,287 @@ int _verbose_ = 0;
 int _alt_measure_ = 0;
 quantum_reg _proto_diag_qubit_;
 quantum_reg _proto_dual_diag_qubit_;
-/*  quantum_matrix _cz_gate_ = 
-    { 4,4, (COMPLEX_FLOAT[16]){1,0,0,0,
-			       0,1,0,0,
-			       0,0,1,0,
-			       0,0,0,-1} };
+cl_mem target_buffer; //buffer of size one used to send arguments for gates X, Z, CZ
 
-                   */
+
+/************
+ ** OPENCL **
+ ************/
+
+
+void CheckErr (cl_int err, const char * name)
+{
+	if (err != CL_SUCCESS) {
+		printf("ERROR: %s (%d)", name, err);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void free_opencl() {
+
+    ret = clFlush(command_queue);
+	ret = clFinish(command_queue);
+	ret = clReleaseProgram(program);
+    ret = clReleaseMemObject(target_buffer);
+	ret = clReleaseCommandQueue(command_queue);
+	ret = clReleaseContext(context);
+
+
+}
+
+void init_opencl() {
+   
+ cl_uint ret_num_devices;
+ cl_uint ret_num_platforms;
+ ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+ CheckErr(ret, "PlatformIDs, line 50: ");
+ ret = clGetDeviceIDs( platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
+ CheckErr(ret, "DeviceIDs, line 52");
+ 
+ context = clCreateContext( NULL, 1, &device_id, NULL, NULL, &ret);
+ CheckErr(ret, "CreateContext, line 61: ");
+ command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
+ CheckErr(ret, "CreateCommandQueue, line 63: ");
+
+ 
+}
+
+cl_program build_program(char *file){
+
+    FILE *fp;
+	char *source_str;
+	size_t source_size;
+	fp = fopen(file, "r");
+	if (!fp) {
+		fprintf(stderr, "Failed to load kernel, \n");
+		exit(1);
+		}
+
+    source_str = (char*)malloc(MAX_SOURCE_SIZE);
+	source_size = fread( source_str, 1, MAX_SOURCE_SIZE, fp);
+	fclose( fp);
+    cl_program program = clCreateProgramWithSource(context, 1, (const char **)&source_str, (const size_t *)&source_size, &ret);
+	CheckErr(ret, "CreateProgramWithSource, line 65: ");
+	ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+//	if (ret == CL_BUILD_PROGRAM_FAILURE) {
+	    // Determine the size of the log
+	    size_t log_size;
+    	clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+	    // Allocate memory for the log
+    	char *log = (char *) malloc(log_size);
+
+    	// Get the log
+    	clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+    	// Print the log
+    	printf("%s\n", log);
+//	}
+
+    return program;
+}
+
+cl_mem qureg_to_buffer(quantum_reg reg) {
+
+    cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, reg.size * sizeof(COMPLEX_FLOAT), NULL,&ret);
+	CheckErr(ret, "CreateBuffer: ");
+    ret = clEnqueueWriteBuffer(command_queue, buffer, CL_TRUE, 0, reg.size * sizeof(COMPLEX_FLOAT), reg.amplitudes, 0, NULL, NULL);
+    CheckErr(ret, "EnqueueWriteBuffer: ");
+
+    return buffer;
+}
+
+quantum_reg buffer_to_qureg(cl_mem buffer, int qubits) {
+
+    quantum_reg newqureg = quantum_new_qureg(qubits);
+    size_t size = pow(2,qubits);
+    COMPLEX_FLOAT * amplitudes = malloc(size * sizeof(COMPLEX_FLOAT));
+    ret = clEnqueueReadBuffer(command_queue, buffer, CL_TRUE, 0, size * sizeof(COMPLEX_FLOAT), amplitudes, 0 , NULL, NULL);
+    CheckErr(ret, "ResultBuffer: ");
+    newqureg.amplitudes = amplitudes;
+    return newqureg;
+
+
+
+}
+/*
+uint Log2( uint x )
+{
+  uint ans = 0 ;
+  while( x>>=1 ) ans++;
+  return ans ;
+}
+*/
+cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t size2) {
+    
+    size_t newsize = size1 * size2;
+    cl_mem newqureg = clCreateBuffer(context, CL_MEM_READ_WRITE, newsize * sizeof(COMPLEX_FLOAT), NULL, &ret);
+    CheckErr(ret, "CreateBuffer: ");
+
+    cl_kernel kernel = clCreateKernel(program, "kronecker", &ret);
+	CheckErr(ret, "CreateKernel, line 90: ");
+
+    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&newqureg);
+	CheckErr(ret, "SetKernelArg0, line 93: ");
+	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&qureg1);
+	CheckErr(ret, "SetKernelArg1, line 96: ");
+	ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&qureg2);
+	CheckErr(ret, "SetKernelArg2, line 99: ");
+
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &newsize, &size1, 0, NULL, NULL);
+	CheckErr(ret, "EnqueueNDRangeKernel, line 106: ");
+  /*
+    int qubits = Log2(newsize);
+    quantum_reg qureg = buffer_to_qureg(newqureg, qubits);
+    printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
+    quantum_print_qureg(qureg);
+    */
+    ret = clReleaseKernel(kernel);
+
+    return newqureg;
+
+}
+
+void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position) {
+
+    
+   
+  ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &qubit_position, 0, NULL, NULL);  
+  CheckErr(ret, "WriteBuffer_X:" ); 
+
+  cl_kernel kernel = clCreateKernel(program, "quantum_X", &ret);
+  CheckErr(ret, "CreateKernel, line 90: ");
+  ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&input_buffer);
+  CheckErr(ret, "SetKernelArg, line 93: ");
+  ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&target_buffer);
+  CheckErr(ret, "SetKernelArg: ");
+  ret = clSetKernelArg(kernel, 2, size * sizeof(COMPLEX_FLOAT), NULL);
+  CheckErr(ret, "SetKernelArg, line 99: ");
+  ret = clSetKernelArg(kernel, 3, size * sizeof(COMPLEX_FLOAT), NULL);
+  CheckErr(ret, "SetKernelArg, line 99: ");
+
+   
+
+  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
+  CheckErr(ret, "EnqueueNDRangeKernel, line 106: ");
+
+  ret = clReleaseKernel(kernel);
+}
+
+void parralel_quantum_Z(cl_mem input_buffer, size_t size, int qubit_position) {
+
+    cl_int target = 1 << qubit_position;
+    ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &target, 0, NULL, NULL);
+    CheckErr(ret, "WriteBuffer_Z");
+
+    cl_kernel kernel = clCreateKernel(program, "quantum_Z", &ret);
+    CheckErr(ret, "CreateKernel: ");
+    ret = clSetKernelArg(kernel, 0 , sizeof(cl_mem), (void*)&input_buffer);
+    CheckErr(ret, "SetKernelArg");
+    ret = clSetKernelArg(kernel, 1 , sizeof(cl_mem), (void*)&target_buffer);
+    CheckErr(ret, "SetKernelArg");
+
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
+    CheckErr(ret, "EnqueueNDRangeKernel: ");
+
+    ret = clReleaseKernel(kernel);
+}
+
+void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int qid2) {
+
+
+    cl_int bitmask = (1 << qid1) | (1 << qid2);
+
+    ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &bitmask, 0, NULL, NULL);
+    CheckErr(ret, "WriteBuffer_CZ");
+
+    cl_kernel kernel = clCreateKernel(program, "quantum_CZ", &ret);
+    CheckErr(ret, "CreateKernel: ");
+    ret = clSetKernelArg(kernel, 0 , sizeof(cl_mem), (void*)&input_buffer);
+    CheckErr(ret, "SetKernelArg");
+    ret = clSetKernelArg(kernel, 1 , sizeof(cl_mem), (void*)&target_buffer);
+    CheckErr(ret, "SetKernelArg");
+
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
+    CheckErr(ret, "EnqueueNDRangeKernel: ");
+
+
+    ret = clReleaseKernel(kernel);
+}
+
+cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, cl_int qubits)
+{
+  
+  size_t size = 1 << (qubits-1);
+
+  cl_uint * args = malloc(2 * sizeof(cl_uint));
+  args[0] = 1 << pos;
+  args[1] = 1 << qubits;
+  args[2] = ((uint)(-1/args[0]))*args[0];
+  args[3] = -1 % args[0];
+
+  printf("\ntest²: %u, %u, %u, %u, %u %f\n", pos, args[0], args[1], args[2], args[3], angle);
+  
+  quantum_reg qureg = buffer_to_qureg(input_buffer, qubits);
+  //printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
+  quantum_print_qureg(qureg);
+
+  cl_mem output_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, size * sizeof(COMPLEX_FLOAT), NULL, &ret);
+  CheckErr(ret, "diag_outputbuffer");
+  cl_mem args_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 4 * sizeof(cl_uint), NULL, &ret);
+  CheckErr(ret, "diag_argbuffer");
+  cl_mem angle_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_double), NULL, &ret);
+  // cl_mem angle_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_double), NULL, &ret);
+  //CheckErr(ret, "diag_anglebuffer");
+
+  //cl_mem dump_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, 2 * sizeof(cl_double), NULL, &ret);
+  ret = clEnqueueWriteBuffer(command_queue, args_buffer, CL_TRUE, 0, 4* sizeof(cl_uint), args, 0, NULL, NULL);
+  CheckErr(ret, "x3");
+  ret= clEnqueueWriteBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), &angle, 0, NULL, NULL);
+  CheckErr(ret, "x25");
+  cl_uint * vars = malloc(4 * sizeof(cl_uint));
+  cl_double * testangle = malloc(sizeof(cl_double));
+  ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 4 * sizeof(cl_uint), vars, 0 , NULL, NULL);
+  ret = clEnqueueReadBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), testangle, 0, NULL, NULL);
+  printf("\ntest⁴: %u %u %u %u %f \n", vars[0], vars[1], vars[2], vars[3], testangle[0]);
+ // ret = clEnqueueWriteBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), &angle, 0, NULL, NULL);
+ // CheckErr(ret, "x4");
+
+  cl_kernel kernel = clCreateKernel(program, "quantum_diag_measure", &ret);
+  CheckErr(ret, "x3");
+  ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&input_buffer);
+  CheckErr(ret, "x3");
+  ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&output_buffer);
+  CheckErr(ret, "x3");
+  //ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&angle_buffer);
+  //CheckErr(ret, "x3");
+  ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&args_buffer);
+   CheckErr(ret, "x3");
+  ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void*)&angle_buffer);
+
+  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1 , NULL, &size, &size, 0, NULL, NULL);
+  CheckErr(ret, "x3");
+  //ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 3 * sizeof(cl_double), args, 0 , NULL, NULL);
+  //printf("\ntest⁴: %f %f %f\n", args[0], args[1], args[2]);
+  
+  qureg = buffer_to_qureg(input_buffer, qubits);
+  //printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
+  quantum_print_qureg(qureg);
+
+  ret = clReleaseKernel(kernel);
+  CheckErr(ret, "x3");
+  ret = clReleaseMemObject(input_buffer);
+  CheckErr(ret, "x3");
+  ret = clReleaseMemObject(args_buffer);
+  CheckErr(ret, "x3");
+  //ret= clReleaseMemObject(angle_buffer);
+
+  return output_buffer; 
+
+
+}
+
+
 /************
  ** TANGLE **
  ************/
@@ -54,6 +329,7 @@ typedef struct tangle {
   tangle_size_t size;
   qid_list_t* qids;
   quantum_reg qureg;
+  cl_mem qureg_buffer;
  } tangle_t;  
 
 tangle_t* init_tangle() {
@@ -77,6 +353,8 @@ void free_tangle( tangle_t* tangle ) {
   tangle->size = 0;
   tangle->qids = NULL;
   quantum_delete_qureg( &tangle->qureg );
+  cl_mem test = tangle->qureg_buffer;
+  clReleaseMemObject(test);
   free( tangle ); //FREE tangle
 }
 
@@ -129,6 +407,10 @@ bool invalid( const qubit_t qubit ) {
 }
 quantum_reg* get_qureg( const qubit_t qubit ) {
   return &qubit.tangle->qureg;
+}
+
+cl_mem get_buffer (const qubit_t qubit) {
+    return qubit.tangle->qureg_buffer;
 }
 
 
@@ -291,25 +573,22 @@ qmem_t* init_qmem() {
   qmem->signal_map = (signal_map_t){{0},{0}};
   
   // instantiate prototypes (libquantum quregs)
-  _proto_diag_qubit_ = quantum_new_qureg(1);
+  target_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_int), NULL, &ret);
+  _proto_diag_qubit_ = quantum_new_qureg(1); 
   _proto_dual_diag_qubit_ = quantum_new_qureg(2);
-  general_quantum_CZ(0,1,&_proto_dual_diag_qubit_);
+  general_quantum_CZ(0, 1, &_proto_dual_diag_qubit_);
   /*
-  quantum_hadamard(0, &_proto_diag_qubit_);
-  quantum_hadamard(0, &_proto_dual_diag_qubit_);
-  quantum_hadamard(1, &_proto_dual_diag_qubit_);
-  quantum_gate2(0, 1, _cz_gate_, &_proto_dual_diag_qubit_);  
-  */
-  // seed RNG
-  //sranddev();
+  COMPLEX_FLOAT mult = {-1,0};
 
+  _proto_dual_diag_qubit_.amplitudes[3] = mult; 
+*/
   srand(time(0));
   return qmem;
+
 }
 
 void free_qmem(qmem_t* qmem) {
-  quantum_delete_qureg( &_proto_diag_qubit_ );
-  quantum_delete_qureg( &_proto_dual_diag_qubit_ );
+
 
   for( int i=0, tally=0 ; tally < qmem->size ; i++ ) {
     assert(i<MAX_TANGLES);
@@ -353,8 +632,8 @@ add_dual_tangle( const qid_t qid1,
   qmem->size += 1;
 
   // init quantum state
-  quantum_copy_qureg(&_proto_dual_diag_qubit_,
-		     &tangle->qureg);
+  tangle->qureg_buffer = qureg_to_buffer(_proto_dual_diag_qubit_);
+  tangle->qureg = quantum_new_qureg(1);
   return tangle;
 }
 
@@ -369,8 +648,8 @@ add_tangle( const qid_t qid,
   // update qmem info
   qmem->size += 1;
   // init quantum state
-  quantum_copy_qureg(&_proto_diag_qubit_,
-		     &tangle->qureg);
+  tangle->qureg_buffer = qureg_to_buffer(_proto_diag_qubit_);
+  tangle->qureg = quantum_new_qureg(1);
   return tangle;
 }
 
@@ -383,14 +662,16 @@ add_qubit( const qid_t qid,
   assert(tangle);
   // appends new qid:  qids := [[qids...],qid]
   append_qids( add_qid(qid,NULL), tangle->qids );
+  int oldsize = 1 << tangle->size;
   tangle->size += 1;
   // tensor |+> to tangle
-  const quantum_reg new_qureg = 
-    quantum_kronecker(&tangle->qureg,&_proto_diag_qubit_);
+  cl_mem _proto_buffer = qureg_to_buffer(_proto_diag_qubit_);
+  const cl_mem new_buffer = 
+    parralel_kronecker(tangle->qureg_buffer,_proto_buffer, oldsize, 2);
   // out with the old
-  quantum_delete_qureg( &tangle->qureg );
+  ret = clReleaseMemObject(tangle->qureg_buffer);
   // in with the new
-  tangle->qureg = new_qureg;
+  tangle->qureg_buffer = new_buffer;
 }
 
 void 
@@ -447,17 +728,18 @@ merge_tangles(tangle_t* restrict tangle_1,
 	      tangle_t* restrict tangle_2, 
 	      qmem_t* restrict qmem) {
   assert( tangle_1 && tangle_2 );
+  int size_1 = pow(2,tangle_1->size);
+  int size_2 = pow(2,tangle_2->size);
   tangle_1->size = tangle_1->size + tangle_2->size;
   // append qids of tangle_2 to tangle_1, destructively
   append_qids( tangle_2->qids, tangle_1->qids);
   // tensor both quregs
-  const quantum_reg new_qureg = 
-    quantum_kronecker( &tangle_1->qureg, &tangle_2->qureg );
+  const cl_mem new_qureg = 
+    parralel_kronecker(tangle_1->qureg_buffer, tangle_2->qureg_buffer, size_1, size_2);
   // out with the old
-  quantum_delete_qureg( &tangle_1->qureg );
-  quantum_delete_qureg( &tangle_2->qureg );
+  ret = clReleaseMemObject(tangle_1->qureg_buffer);
   // in with the new
-  tangle_1->qureg = new_qureg;
+  tangle_1->qureg_buffer = new_qureg;
 
   tangle_2->qids = NULL; // avoids the qid_list from being collected
   delete_tangle( tangle_2, qmem ); //free the tangle
@@ -689,37 +971,17 @@ quantum_reconstruct_hash(quantum_reg *reg)
 
 */
 
+/*
 int
 quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
 {
-  //int result=0;
-  //int value=0;
+
+
   quantum_reg out = quantum_new_qureg(reg->qubits-1);
   MAX_UNSIGNED pos2 = (MAX_UNSIGNED) 1 << pos;
   double limit = (1.0 / ((MAX_UNSIGNED) 1 << reg->qubits)) / 1000000;
   double prob=0, norm = 0;
   COMPLEX_FLOAT amp = 0;
-
-  // TODO: currently just measures to <+_alpha|
- // out.width = reg->width-1;
-  //out.size = reg->size;
-  //out.node = calloc(reg->size, sizeof(quantum_reg_node));
-  //quantum_memman(size * sizeof(quantum_reg_node));
-  //out.hashw = reg->hashw;
-  //out.hash = reg->hash;
-  
- // for( int i=0 ; i<reg->size ; ++i ) {
-    //    quantum_prob_inline( reg->node[i].ampl
- // }
-
-  //if(reg->hashw)
-   // quantum_reconstruct_hash(reg);
-
-  /* METHOD 1:
-      loop through all collapsed basis and lookup the two contributing
-      amplitudes.
-      should have really rubbish cache usage */
-   
 
   typedef unsigned int basis;
   basis upper_mask = ((basis)(-1/pos2))*pos2;
@@ -742,8 +1004,6 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
       amp += k_is_odd ? reg->amplitudes[i] 
 	              : -(reg->amplitudes[i] * quantum_cexp(-angle));
       prob = quantum_prob_inline( amp );
-     // printf("\n amp = %e, state = %u \n", amp, state);
-     // printf("prob = %e, limit = %e \n", prob, limit);  
       if( prob > limit ) {
 	    norm += prob;
 	    out.amplitudes[state] = amp;
@@ -752,69 +1012,43 @@ quantum_diag_measure(int pos, double angle, quantum_reg* restrict reg)
       amp = 0;
     }
   
-  /*out.size = free;
-  if( out.size != reg->size ) {
-    out.node = realloc(out.node, (out.size)*sizeof(quantum_reg_node));
-    if(out.node == NULL) 
-    quantum_error(QUANTUM_ENOMEM);
-
-    
-  }
-  */
-  // normalize, turned off
-
-  /* norm = sqrt(norm); */
-  /* if( abs(1-norm) > limit ) */
-  /*   for( int i=0; i<out.size; ++i ) */
-  /*     out.node[i].amplitude /= norm; */
-
   printf("just testing: reg=%u ; out=%u", reg->qubits, out.qubits);
   
   quantum_delete_qureg(reg);
  *reg = out;
 
  return 1;
+ }
+*/
 
-
-  /* METHOD 2: suggestion
-      loop through all amplitudes
-      
-  */
-
-
-
-}
 
 void qop_cz( const qubit_t qubit_1, const qubit_t qubit_2 ) {
   const int tar1 = get_target(qubit_1);
   const int tar2 = get_target(qubit_2);
   assert( !(invalid(qubit_1) || invalid(qubit_2)) );
   assert( qubit_1.tangle == qubit_2.tangle );
-  quantum_reg* reg = get_qureg( qubit_1 );
-  general_quantum_CZ(tar1, tar2, reg);
+  int size = pow(2,qubit_1.tangle->size);
+
+  parralel_quantum_CZ(get_buffer(qubit_1), size, tar1, tar2);
 
   
 }
 
 void qop_x( const qubit_t qubit ) {
   assert( !invalid(qubit) );
-  quantum_reg* reg = get_qureg(qubit);
-  quantum_reg new = quantum_new_qureg(reg->qubits);
-  general_quantum_X(reg, &new, get_target(qubit));
-  quantum_copy_qureg(&new,reg);
-  quantum_delete_qureg(&new);
+  size_t size = pow(2,qubit.tangle->size);
+  int target = pow(2,get_target(qubit));
+  parralel_quantum_X(get_buffer(qubit), size, get_target(qubit));
 }
 
 void qop_z( const qubit_t qubit ) {
   assert( !invalid(qubit) );
-  quantum_reg* reg = get_qureg(qubit);
-  quantum_reg new = quantum_new_qureg(reg->qubits);
-  general_quantum_Z(reg, &new, get_target(qubit));
-  quantum_copy_qureg(&new,reg);
-  quantum_delete_qureg(&new);
+  int size = pow(2,qubit.tangle->size);
+  parralel_quantum_Z(get_buffer(qubit), size, get_target(qubit));
 }
 
 /* Apply a phase kick by the angle GAMMA */
+/*
 void
 quantum_inv_phase_kick(int target, double gamma, quantum_reg *reg)
 {
@@ -837,6 +1071,8 @@ quantum_inv_phase_kick(int target, double gamma, quantum_reg *reg)
 
   //  quantum_decohere(reg);
 }
+
+*/
 
 /***************
  ** EVALUATOR **
@@ -994,8 +1230,10 @@ void eval_M(sexp_t* exp, qmem_t* qmem) {
   //  quantum_inv_phase_kick( get_target(qubit), angle, get_qureg(qubit) );
 
   //if( _alt_measure_ )
-    signal = quantum_diag_measure( get_target(qubit), 
-				   angle,get_qureg(qubit) );
+    cl_mem newbuffer = parralel_diag_measure(get_buffer(qubit), get_target(qubit), angle, qubit.tangle->size);
+    signal = 1;
+    qubit.tangle->qureg_buffer = newbuffer;
+
   /*else {
     quantum_phase_kick( get_target(qubit), -angle, get_qureg( qubit ) );
   
@@ -1157,12 +1395,10 @@ void eval( sexp_t* restrict exp, qmem_t* restrict qmem ) {
 COMPLEX_FLOAT parse_complex( const char* str ) {
   char* next_str = NULL;
   char* last_str = NULL;
-  double real = strtod(str, &next_str);
-  double imaginary = strtod(next_str, &last_str);
-  if( last_str && (last_str[0] == 'i') )
-    return real + imaginary * IMAGINARY;
-  else 
-    return real + 0 * IMAGINARY;
+  cl_float real = strtod(str, &next_str);
+  cl_float imag = strtod(next_str, &last_str);
+  COMPLEX_FLOAT cplx = {real,imag};
+  return cplx;
 }
 
 
@@ -1257,8 +1493,8 @@ produce_output_file( const char* output_file,
     sprintf(str,"(%lli ", i);
     sadd(out, str);
     sprintf( str, "% .12g%+.12gi)", 
-	     quantum_real(reg.amplitudes[i]),
-	     quantum_imag(reg.amplitudes[i]) );
+	     real(reg.amplitudes[i]),
+	     imag(reg.amplitudes[i]) );
     sadd(out, str);
     if( i+1<reg.size )
       sadd(out, "\n  ");
@@ -1285,21 +1521,28 @@ void initialize_input_state( const char* input_file, qmem_t* qmem ) {
   close(fd);  
 }
 
+//to parralelize, later.
+
 void quantum_normalize( quantum_reg reg ) {
   double limit = 1.0e-8;
-  COMPLEX_FLOAT norm=0;
-  for( int i=0; i<reg.size; ++i ) {
-    norm += quantum_prob_inline(reg.amplitudes[i]);
+  COMPLEX_FLOAT norm={0,0};
+  cl_float q_prob;
+  for( int i=0; i<reg.size; ++i ) {  
+    q_prob = quantum_prob_inline(reg.amplitudes[i]);
+    norm = caddfl(norm, q_prob);
   }
-  if( abs(1-norm) < limit )
+
+  if( abs(1-real(norm)) < limit )
     for( int i=0; i<reg.size; ++i ) {
-      reg.amplitudes[i] /= norm;
+      reg.amplitudes[i] = cdiv(reg.amplitudes[i], norm);
     }
 }
 
 int main(int argc, char* argv[]) {
   sexp_iowrap_t* input_port;
   sexp_t* mc_program;
+  init_opencl();
+  program = build_program("quantum_kernel.cl");
   qmem_t* restrict qmem = init_qmem();
   CSTRING* str = snew( 0 );
 
@@ -1389,10 +1632,20 @@ int main(int argc, char* argv[]) {
     eval( mc_program->list, qmem );
   }
 
+  //get information back from buffers to the quregs
+  
+  tangle_t* tangle = NULL;
+  for(int t=0; t <qmem->size;t++) {
+    tangle = qmem->tangles[t];
+    if ( tangle ) {
+        quantum_reg qureg = buffer_to_qureg(tangle->qureg_buffer, tangle->size);
+        tangle->qureg = qureg;
+    }
+  }
   //normalize at the end, not during measurement
 
   int tally=0;
-  tangle_t* tangle=NULL;
+  tangle=NULL;
   for( int t=0; tally<qmem->size; ++t ) {
     tangle = qmem->tangles[t];
     if( tangle ) {
@@ -1415,6 +1668,7 @@ int main(int argc, char* argv[]) {
   destroy_sexp( mc_program );
   sexp_cleanup();
   free_qmem( qmem );
+  free_opencl();
   return 0;
 
 }

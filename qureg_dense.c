@@ -2,6 +2,7 @@
 #include "string.h"
 #include "math.h"
 
+
 typedef unsigned int uint;
 
 unsigned long quantum_memman(long change)
@@ -24,7 +25,7 @@ quantum_new_qureg (int qubits)
     /*Allocate memory*/
     int size = pow(2,qubits);
     int i;
-    COMPLEX_FLOAT filler = pow((sqrt(0.5)), qubits);
+    COMPLEX_FLOAT filler = {pow((sqrt(0.5)), qubits), 0};
     reg.amplitudes = malloc(size * sizeof(COMPLEX_FLOAT));
     for (i = 0; i<size; i++)
 	    reg.amplitudes[i] = filler;
@@ -36,11 +37,6 @@ quantum_new_qureg (int qubits)
 
 }
 
-
-
-/*quantum_reg
-quantum_new_qureg_size Useful?
-*/        
 
 void
 quantum_delete_qureg(quantum_reg *reg)
@@ -59,6 +55,7 @@ quantum_copy_qureg(quantum_reg* src, quantum_reg* dst)
    memcpy(dst->amplitudes, src->amplitudes, src->size*sizeof(COMPLEX_FLOAT));
 }
 
+
 quantum_reg
 quantum_kronecker (quantum_reg *reg1, quantum_reg *reg2)
 {
@@ -71,7 +68,7 @@ quantum_kronecker (quantum_reg *reg1, quantum_reg *reg2)
    
    for(i=0; i<reg1->size;i++)
     for(j=0; j<reg2->size;j++)
-        reg.amplitudes[i*reg2->size+j]=reg1->amplitudes[i]*reg2->amplitudes[j];
+        reg.amplitudes[i*reg2->size+j]=cmult(reg1->amplitudes[i],reg2->amplitudes[j]);
    
    return reg;
 
@@ -92,8 +89,9 @@ quantum_print_qureg(quantum_reg reg)
   
   for(i=0; i<reg.size; i++)
     {
-      printf("% f %+fi|%u> (%e) (|", quantum_real(reg.amplitudes[i]),
-	     quantum_imag(reg.amplitudes[i]), i, quantum_prob_inline(reg.amplitudes[i]));
+      printf("% f %+fi|%u> (%e) (|", real(reg.amplitudes[i]),
+	     imag(reg.amplitudes[i]), i, quantum_prob_inline(reg.amplitudes[i]));
+
          
       for(j=Log2(reg.size)-1;j>=0;j--)
 	{

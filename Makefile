@@ -1,13 +1,13 @@
 CC = gcc
 
-SOURCES = qvm.c qureg_dense.c gates.c complex.c
+SOURCES = qvm.c gates.c qureg_dense.c cfloat.c
 
 TARGETS = qvm
 
 VPATH = sexp/lib
-INCPATH = -I./sexp/include -I./
+INCPATH = -I./sexp/include -I /usr/local/cuda-5.0/include -I./
 LIBPATH = -L./sexp/lib
-LIBS = -lsexp -lm #-lquantum 
+LIBS = -lsexp -lm -lOpenCL
 OFLAGS = #-O2 -Wall #-O2
 DFLAGS = -g
 CFLAGS = $(OFLAGS) $(DFLAGS) $(INCPATH) $(LIBPATH) -std=c99

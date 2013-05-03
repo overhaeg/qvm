@@ -3,11 +3,12 @@
 #include <math.h>
 #include <assert.h>
 #include <string.h>
-
+#include <CL/cl.h>
 
 typedef unsigned int uint;
-
-#include "qureg_dense.h"
+#include "gates.h"
+//#include "cfloat.h"
+//#include "qureg_dense.h"
 //#include "config.h"
 
 // Arguments:
@@ -103,12 +104,13 @@ void general_quantum_X(const quantum_reg * const input, quantum_reg *output, uin
 
 void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uint qubit_position) {
   qubit_position = reformat_args(qubit_position); 
-  uint i, p_i;    
+  uint i, p_i;
+  COMPLEX_FLOAT mult = {-1,0};
   const int size = output->size;
   for ( i=0; i<size; i++) {
       p_i = permute(i, qubit_position, size);
       if (p_i % 2 == 1) {
-          output->amplitudes[i] = input->amplitudes[i] * -1;
+          output->amplitudes[i] = cmult(input->amplitudes[i] , mult);
       }
       else { output->amplitudes[i] = input->amplitudes[i];}
   }
@@ -117,14 +119,15 @@ void general_quantum_Z(const quantum_reg * const input, quantum_reg *output, uin
 }
 
 void general_quantum_CZ(int tar1, int tar2, quantum_reg * qureg) {
-  int i;  
-  MAX_UNSIGNED bitmask = 
-    ((MAX_UNSIGNED) 1 << tar1) | ((MAX_UNSIGNED) 1 << tar2);
+  int i; 
+  COMPLEX_FLOAT mult = {-1,0};
+  uint bitmask = 
+   ( 1 << tar1 ) | ( 1 << tar2);
   for(i=0; i<qureg->size; i++)
     {
       /* Flip the target bit of a basis state if the control bit is set */     
       if((i & bitmask) == bitmask)
-	qureg->amplitudes[i] *= (COMPLEX_FLOAT)-1;
+	qureg->amplitudes[i] = cmult(qureg->amplitudes[i],mult);
     }
 }
 
@@ -137,8 +140,8 @@ void print_array(const char* name, const uint * const array, size_t size) {
     printf("%u, ", array[i]);
   printf("%u }\n\n", array[size-1]);
 }
-
 /*
+
 int main( int argc, char* argv[] ) {
  
   uint i, p_i;
@@ -151,15 +154,14 @@ int main( int argc, char* argv[] ) {
  // RUN_TEST( alt2_permute(i, 2,  4) );
   
 
-  COMPLEX_FLOAT complex_input[4] =  { 0, 1, 2, 3};
+  //COMPLEX_FLOAT complex_input[4] =  { 0, 1, 2, 3};
   
 
   printf("\ntesting the quantum ops:\n");
-  quantum_reg input = quantum_new_qureg(2); 
+  quantum_reg input = quantum_new_qureg(4); 
   
-  quantum_reg output = quantum_new_qureg(2);
-  quantum_reg test = quantum_new_qureg(1);
-  input.amplitudes = complex_input;
+  quantum_reg output = quantum_new_qureg(4);
+  quantum_reg test = quantum_new_qureg(4);
   general_quantum_CZ(0,1,&input);
   quantum_reg kronecker_test = quantum_kronecker(&input, &test); 
   quantum_reg output2 = quantum_new_qureg(kronecker_test.qubits);
