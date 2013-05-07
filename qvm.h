@@ -22,6 +22,7 @@ cl_context context;
 cl_command_queue command_queue;
 cl_int ret;
 cl_program program;
+size_t max_group;
 
 extern void quantum_copy_qureg(quantum_reg *src, quantum_reg *dst);
 extern void quantum_delete_qureg_hashpreserve(quantum_reg *reg);

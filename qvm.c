@@ -78,6 +78,8 @@ void init_opencl() {
  command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
  CheckErr(ret, "CreateCommandQueue, line 63: ");
 
+ clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);
+
  
 }
 
@@ -149,22 +151,34 @@ uint Log2( uint x )
 */
 cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t size2) {
     
+    uint multiplier = 0;
+ 
+    if(size2 > max_group)
+    {
+      multiplier = size2/max_group;
+      size2 = max_group;
+    }
+      
     size_t newsize = size1 * size2;
     cl_mem newqureg = clCreateBuffer(context, CL_MEM_READ_WRITE, newsize * sizeof(COMPLEX_FLOAT), NULL, &ret);
     CheckErr(ret, "CreateBuffer: ");
+    
+    ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_uint), &multiplier, 0, NULL, NULL);
 
     cl_kernel kernel = clCreateKernel(program, "kronecker", &ret);
 	CheckErr(ret, "CreateKernel, line 90: ");
-
+   
     ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&newqureg);
-	CheckErr(ret, "SetKernelArg0, line 93: ");
+	CheckErr(ret, "KroSetKernelArg0, line 93: ");
 	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&qureg1);
-	CheckErr(ret, "SetKernelArg1, line 96: ");
+	CheckErr(ret, "KroSetKernelArg1, line 96: ");
 	ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&qureg2);
-	CheckErr(ret, "SetKernelArg2, line 99: ");
+	CheckErr(ret, "KroSetKernelArg2, line 99: ");
+    ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void*)&target_buffer);
+    CheckErr(ret, "KroSetKernelArg3, line 99: ");
 
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &newsize, &size1, 0, NULL, NULL);
-	CheckErr(ret, "EnqueueNDRangeKernel, line 106: ");
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &newsize, &size2, 0, NULL, NULL);
+	CheckErr(ret, "Kro.EnqueueNDRangeKernel, line 106: ");
   /*
     int qubits = Log2(newsize);
     quantum_reg qureg = buffer_to_qureg(newqureg, qubits);
@@ -172,14 +186,15 @@ cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t siz
     quantum_print_qureg(qureg);
     */
     ret = clReleaseKernel(kernel);
-
+    
     return newqureg;
 
 }
 
 void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position) {
 
-    
+  size_t groupSize = size>max_group ? max_group : size;
+
    
   ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &qubit_position, 0, NULL, NULL);  
   CheckErr(ret, "WriteBuffer_X:" ); 
@@ -197,14 +212,16 @@ void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position
 
    
 
-  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
-  CheckErr(ret, "EnqueueNDRangeKernel, line 106: ");
+  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &groupSize, 0, NULL, NULL);
+  CheckErr(ret, "X.EnqueueNDRangeKernel, line 106: ");
 
   ret = clReleaseKernel(kernel);
 }
 
 void parralel_quantum_Z(cl_mem input_buffer, size_t size, int qubit_position) {
-
+    
+    size_t groupSize = size>max_group ? max_group : size;
+    
     cl_int target = 1 << qubit_position;
     ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &target, 0, NULL, NULL);
     CheckErr(ret, "WriteBuffer_Z");
@@ -217,13 +234,15 @@ void parralel_quantum_Z(cl_mem input_buffer, size_t size, int qubit_position) {
     CheckErr(ret, "SetKernelArg");
 
     ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
-    CheckErr(ret, "EnqueueNDRangeKernel: ");
+    CheckErr(ret, "Z.EnqueueNDRangeKernel: ");
 
     ret = clReleaseKernel(kernel);
 }
 
 void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int qid2) {
 
+   size_t groupSize = size>max_group ? max_group : size;
+    
 
     cl_int bitmask = (1 << qid1) | (1 << qid2);
 
@@ -237,8 +256,8 @@ void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int q
     ret = clSetKernelArg(kernel, 1 , sizeof(cl_mem), (void*)&target_buffer);
     CheckErr(ret, "SetKernelArg");
 
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
-    CheckErr(ret, "EnqueueNDRangeKernel: ");
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &groupSize, 0, NULL, NULL);
+    CheckErr(ret, "CZ.EnqueueNDRangeKernel: ");
 
 
     ret = clReleaseKernel(kernel);
@@ -248,32 +267,48 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
 {
   
   size_t size = 1 << (qubits-1);
+  
+  size_t groupSize = size>max_group ? max_group : size;
+  cl_uint lpart, rpart, k_even, k_odd, k, i; 
+  int global_id;
 
   cl_uint * args = malloc(2 * sizeof(cl_uint));
   args[0] = 1 << pos;
   args[1] = 1 << qubits;
   args[2] = ((uint)(-1/args[0]))*args[0];
   args[3] = -1 % args[0];
-
   printf("\ntest²: %u, %u, %u, %u, %u %f\n", pos, args[0], args[1], args[2], args[3], angle);
+   
+  for(global_id = 0; global_id < size; global_id++){
+
+  lpart = args[2] & global_id<<1;
+  rpart = args[3] & global_id;
   
-  quantum_reg qureg = buffer_to_qureg(input_buffer, qubits);
+  k_even = (lpart^rpart) & ~args[0];  //(~pos2 is 11…11011…11, k is dus 'even' per constructie)
+  k_odd  = (lpart^rpart) + args[0];
+  k = lpart+rpart;
+  i = k^args[0];
+
+  printf("\ntest³: %u, %u, %u, %u, %u, %u", lpart, rpart, k_even, k_odd, k, i);
+          }
+
+
+  //quantum_reg qureg = buffer_to_qureg(input_buffer, qubits);
   //printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
-  quantum_print_qureg(qureg);
+  //quantum_print_qureg(qureg);
 
   cl_mem output_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, size * sizeof(COMPLEX_FLOAT), NULL, &ret);
   CheckErr(ret, "diag_outputbuffer");
   cl_mem args_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 4 * sizeof(cl_uint), NULL, &ret);
   CheckErr(ret, "diag_argbuffer");
   cl_mem angle_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_double), NULL, &ret);
-  // cl_mem angle_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_double), NULL, &ret);
-  //CheckErr(ret, "diag_anglebuffer");
+  CheckErr(ret, "M_anglebuffer");
 
   //cl_mem dump_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, 2 * sizeof(cl_double), NULL, &ret);
   ret = clEnqueueWriteBuffer(command_queue, args_buffer, CL_TRUE, 0, 4* sizeof(cl_uint), args, 0, NULL, NULL);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "M.args.WriteBuffer");
   ret= clEnqueueWriteBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), &angle, 0, NULL, NULL);
-  CheckErr(ret, "x25");
+  CheckErr(ret, "M.angle.WriteBuffer");
   cl_uint * vars = malloc(4 * sizeof(cl_uint));
   cl_double * testangle = malloc(sizeof(cl_double));
   ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 4 * sizeof(cl_uint), vars, 0 , NULL, NULL);
@@ -283,34 +318,37 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
  // CheckErr(ret, "x4");
 
   cl_kernel kernel = clCreateKernel(program, "quantum_diag_measure", &ret);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "M.CreateKernel");
   ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&input_buffer);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "M.SetArg0");
   ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&output_buffer);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "M.SetArg1");
   //ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&angle_buffer);
   //CheckErr(ret, "x3");
   ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&args_buffer);
-   CheckErr(ret, "x3");
+   CheckErr(ret, "M.SetArg2");
   ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void*)&angle_buffer);
-
-  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1 , NULL, &size, &size, 0, NULL, NULL);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "m.SetArg3");
+  ret = clEnqueueNDRangeKernel(command_queue, kernel, 1 , NULL, &size, &groupSize, 0, NULL, NULL);
+  CheckErr(ret, "M.EnqueueNDRangeKernel");
   //ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 3 * sizeof(cl_double), args, 0 , NULL, NULL);
   //printf("\ntest⁴: %f %f %f\n", args[0], args[1], args[2]);
   
-  qureg = buffer_to_qureg(input_buffer, qubits);
+  //qureg = buffer_to_qureg(input_buffer, qubits);
   //printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
-  quantum_print_qureg(qureg);
+  //quantum_print_qureg(qureg);
+
+  //qureg = buffer_to_qureg(output_buffer, qubits - 1 );
+  //quantum_print_qureg(qureg);
 
   ret = clReleaseKernel(kernel);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "mReleaseKernel");
   ret = clReleaseMemObject(input_buffer);
-  CheckErr(ret, "x3");
+  CheckErr(ret, "mReleaseinput");
   ret = clReleaseMemObject(args_buffer);
-  CheckErr(ret, "x3");
-  //ret= clReleaseMemObject(angle_buffer);
-
+  CheckErr(ret, "mReleaseargs");
+  ret= clReleaseMemObject(angle_buffer);
+  CheckErr(ret, "mReleaseangle");
   return output_buffer; 
 
 

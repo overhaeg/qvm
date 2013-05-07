@@ -87,19 +87,29 @@ inline COMPLEX_FLOAT quantum_cexp(double phi)
 
 __kernel void kronecker(__global COMPLEX_FLOAT * result,
                         __global COMPLEX_FLOAT * input1,
-                        __global COMPLEX_FLOAT * input2)
-                        //__global int * tests)
+                        __global COMPLEX_FLOAT * input2,
+                        __global uint * multiplier)
 {
 
     int gl_id = get_global_id(0);
     int loc_id = get_local_id(0);
 	int gr_id = get_group_id(0);	
 	int localSize = get_local_size(0);
+    int i = 0;
+    if (multiplier[0] == 0) { 
+        result[gl_id]=cmult(input1[gr_id],input2[loc_id]);
+    }
+    else {
+        while(i != multiplier[0])
+        {
+            int offset = (i * loc_id) + loc_id; 
+            result[gl_id]=cmult(input1[gr_id],input2[offset]);
+            i++;
+            barrier(CLK_LOCAL_MEM_FENCE);
 
-    
-    result[gl_id]=cmult(input1[loc_id],input2[gr_id]);
+        }
 
-
+    }
 }
 
 
@@ -167,6 +177,8 @@ __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
 
  int global_id = get_global_id(0);
 
+ output[global_id] = input[global_id];
+
  uint pos = args[0];
  uint size = args[1];
  uint upper_mask = args[2];
@@ -181,27 +193,26 @@ __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
  
  uint lpart = upper_mask & global_id<<1;
  uint rpart = lower_mask & global_id;
-
- uint k = lpart + rpart;
- uint i = k^pos;
- uint k_is_odd = k & pos; 
+  
+ uint k_even = (lpart^rpart) & ~pos;  //(~pos2 is 11…11011…11, k is dus 'even' per constructie)
+ uint k_odd  = (lpart^rpart) + pos;
+ //uint k = lpart + rpart;
+ // uint i = k^pos;
+ 
+ //uint k_is_odd = k & pos; 
 
  COMPLEX_FLOAT zero = {0,0};
 
- if( !cequal(input[k],zero))
-      amp = k_is_odd ? cadd(amp, -(cmult(input[k], cexp)))
-	              : cadd(amp, input[k]);
- if( !cequal(input[i],zero))
-      amp = k_is_odd ? cadd(amp, input[i]) 
-	              : cadd(amp, -(cmult(input[i],cexp)));
+ amp = cadd( input[k_even], - cmult(input[k_odd], cexp) ); 
  prob = quantum_prob( amp );
+ COMPLEX_FLOAT test = {k_even,k_odd};
  if( prob > limit ) {
-   // COMPLEX_FLOAT test = {k_is_odd, limit};
-	output[global_id] = amp;
+     
+	output[global_id] = test;
       }
       else {
-             //COMPLEX_FLOAT test = {k_is_odd, rpart};
-             output[global_id] = zero;
+
+             output[global_id] = test;
       }
 
 }
