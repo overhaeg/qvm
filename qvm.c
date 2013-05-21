@@ -194,9 +194,10 @@ cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t siz
 void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position) {
 
   size_t groupSize = size>max_group ? max_group : size;
+  cl_int target = 1 << qubit_position;
 
    
-  ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &qubit_position, 0, NULL, NULL);  
+  ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &target, 0, NULL, NULL);  
   CheckErr(ret, "WriteBuffer_X:" ); 
 
   cl_kernel kernel = clCreateKernel(program, "quantum_X", &ret);
@@ -277,11 +278,11 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
   args[1] = 1 << qubits;
   args[2] = ((uint)(-1/args[0]))*args[0];
   args[3] = -1 % args[0];
-  printf("\ntest²: %u, %u, %u, %u, %u %f\n", pos, args[0], args[1], args[2], args[3], angle);
-   
+ // printf("\ntest²: %u, %u, %u, %u, %u %f\n", pos, args[0], args[1], args[2], args[3], angle);
+ /*  
   for(global_id = 0; global_id < size; global_id++){
 
-  lpart = args[2] & global_id<<1;
+  lpart = (args[2] & global_id)<<1;
   rpart = args[3] & global_id;
   
   k_even = (lpart^rpart) & ~args[0];  //(~pos2 is 11…11011…11, k is dus 'even' per constructie)
@@ -292,7 +293,7 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
   printf("\ntest³: %u, %u, %u, %u, %u, %u", lpart, rpart, k_even, k_odd, k, i);
           }
 
-
+*/
   //quantum_reg qureg = buffer_to_qureg(input_buffer, qubits);
   //printf("\n size1= %u, size2=%u, newsize=%u qubits=%u\n", size1, size2, newsize, qubits);
   //quantum_print_qureg(qureg);
@@ -309,11 +310,11 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
   CheckErr(ret, "M.args.WriteBuffer");
   ret= clEnqueueWriteBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), &angle, 0, NULL, NULL);
   CheckErr(ret, "M.angle.WriteBuffer");
-  cl_uint * vars = malloc(4 * sizeof(cl_uint));
-  cl_double * testangle = malloc(sizeof(cl_double));
-  ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 4 * sizeof(cl_uint), vars, 0 , NULL, NULL);
-  ret = clEnqueueReadBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), testangle, 0, NULL, NULL);
-  printf("\ntest⁴: %u %u %u %u %f \n", vars[0], vars[1], vars[2], vars[3], testangle[0]);
+ // cl_uint * vars = malloc(4 * sizeof(cl_uint));
+ // cl_double * testangle = malloc(sizeof(cl_double));
+ // ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 4 * sizeof(cl_uint), vars, 0 , NULL, NULL);
+ // ret = clEnqueueReadBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), testangle, 0, NULL, NULL);
+  //printf("\ntest⁴: %u %u %u %u %f \n", vars[0], vars[1], vars[2], vars[3], testangle[0]);
  // ret = clEnqueueWriteBuffer(command_queue, angle_buffer, CL_TRUE, 0, sizeof(cl_double), &angle, 0, NULL, NULL);
  // CheckErr(ret, "x4");
 
@@ -615,11 +616,36 @@ qmem_t* init_qmem() {
   _proto_diag_qubit_ = quantum_new_qureg(1); 
   _proto_dual_diag_qubit_ = quantum_new_qureg(2);
   general_quantum_CZ(0, 1, &_proto_dual_diag_qubit_);
-  /*
-  COMPLEX_FLOAT mult = {-1,0};
 
-  _proto_dual_diag_qubit_.amplitudes[3] = mult; 
-*/
+  quantum_reg test = quantum_new_qureg(3);
+  COMPLEX_FLOAT a = {0,0};
+  COMPLEX_FLOAT b = {1,0};
+  COMPLEX_FLOAT c = {2,0};
+  COMPLEX_FLOAT d = {3,0};
+  COMPLEX_FLOAT e = {4,0};
+  COMPLEX_FLOAT f = {5,0};
+  COMPLEX_FLOAT g = {6,0};
+  COMPLEX_FLOAT h = {7,0};
+  
+  test.amplitudes[0] = a;
+  test.amplitudes[1] = b;
+  test.amplitudes[2] = c;
+  test.amplitudes[3] = d;
+  test.amplitudes[4] = e;
+  test.amplitudes[5] = f;
+  test.amplitudes[6] = g;
+  test.amplitudes[7] = h;
+
+
+      
+  cl_mem test_buffer = qureg_to_buffer(test); 
+  
+  parralel_quantum_X(test_buffer, 8, 0);
+
+  quantum_reg output = buffer_to_qureg(test_buffer, 3);
+
+  quantum_print_qureg(output);
+
   srand(time(0));
   return qmem;
 
@@ -1075,7 +1101,6 @@ void qop_cz( const qubit_t qubit_1, const qubit_t qubit_2 ) {
 void qop_x( const qubit_t qubit ) {
   assert( !invalid(qubit) );
   size_t size = pow(2,qubit.tangle->size);
-  int target = pow(2,get_target(qubit));
   parralel_quantum_X(get_buffer(qubit), size, get_target(qubit));
 }
 
@@ -1579,6 +1604,7 @@ void quantum_normalize( quantum_reg reg ) {
 int main(int argc, char* argv[]) {
   sexp_iowrap_t* input_port;
   sexp_t* mc_program;
+  start = PAPI_get_real_usec();  
   init_opencl();
   program = build_program("quantum_kernel.cl");
   qmem_t* restrict qmem = init_qmem();
@@ -1691,10 +1717,14 @@ int main(int argc, char* argv[]) {
       ++tally;
     }
   }
+
+  end = PAPI_get_real_usec();
   
   if (!silent) {
     printf("Resulting quantum memory is:\n");
     print_qmem( qmem );
+    printf("Total execution time in ms = %0.3f \n", (end - start) / 1000.0 );
+
   }
 
   if( output_file ) {

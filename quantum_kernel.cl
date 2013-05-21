@@ -126,23 +126,16 @@ __kernel void quantum_X(__global COMPLEX_FLOAT * input,
                         )
 {
  
-
+ 
  uint p_i;
  int gl_id = get_global_id(0);
  int globalSize = get_global_size(0);
-
- p_i = permute(gl_id, target[0], globalSize);
- input_permut[p_i] = input[gl_id];
+ p_i = (gl_id ^ target[0]);
+ input_permut[gl_id] = input[p_i];
  barrier(CLK_LOCAL_MEM_FENCE);
+ input[gl_id] = input_permut[gl_id];
  
- if ((gl_id % 2) == 0)
-     output_permut[gl_id] = input_permut[gl_id+1];
- else output_permut[gl_id] = input_permut[gl_id-1];
- barrier(CLK_LOCAL_MEM_FENCE);
-
- p_i = permute(gl_id, (globalSize / target[0]), globalSize);
- input[p_i] = output_permut[gl_id];
-}
+ }
 
 __kernel void quantum_Z(__global COMPLEX_FLOAT * input,
                         __global int * target)
@@ -191,7 +184,7 @@ __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
 
  //assert( upper_mask + lower_mask == -1 );
  
- uint lpart = upper_mask & global_id<<1;
+ uint lpart = (upper_mask & global_id)<<1;
  uint rpart = lower_mask & global_id;
   
  uint k_even = (lpart^rpart) & ~pos;  //(~pos2 is 11…11011…11, k is dus 'even' per constructie)
@@ -208,11 +201,11 @@ __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
  COMPLEX_FLOAT test = {k_even,k_odd};
  if( prob > limit ) {
      
-	output[global_id] = test;
+	output[global_id] = amp;
       }
       else {
 
-             output[global_id] = test;
+             output[global_id] = zero;
       }
 
 }

@@ -7,7 +7,7 @@ TARGETS = qvm
 VPATH = sexp/lib
 INCPATH = -I./sexp/include -I /usr/local/cuda-5.0/include -I./
 LIBPATH = -L./sexp/lib
-LIBS = -lsexp -lm -lOpenCL
+LIBS = -lsexp -lm -lOpenCL -lpapi
 OFLAGS = #-O2 -Wall #-O2
 DFLAGS = -g
 CFLAGS = $(OFLAGS) $(DFLAGS) $(INCPATH) $(LIBPATH) -std=c99

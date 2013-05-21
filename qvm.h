@@ -9,6 +9,7 @@
 #include "qureg_dense.h"
 #include "gates.h"
 #include <CL/cl.h>
+#include <papi.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -23,6 +24,7 @@ cl_command_queue command_queue;
 cl_int ret;
 cl_program program;
 size_t max_group;
+long_long start, end;
 
 extern void quantum_copy_qureg(quantum_reg *src, quantum_reg *dst);
 extern void quantum_delete_qureg_hashpreserve(quantum_reg *reg);
