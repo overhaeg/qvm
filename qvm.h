@@ -5,7 +5,7 @@
 //#include "libquantum/error.h"
 //#include <quantum.h>
 
-#include "cfloat.h"
+//#include "cfloat.h"
 #include "qureg_dense.h"
 #include "gates.h"
 #include <CL/cl.h>

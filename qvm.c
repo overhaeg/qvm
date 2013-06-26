@@ -78,7 +78,7 @@ void init_opencl() {
  command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
  CheckErr(ret, "CreateCommandQueue, line 63: ");
 
- clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);
+ 
 
  
 }
@@ -151,6 +151,7 @@ uint Log2( uint x )
 */
 cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t size2) {
     
+    clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);
     uint multiplier = 0;
  
     if(size2 > max_group)
@@ -163,7 +164,7 @@ cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t siz
     cl_mem newqureg = clCreateBuffer(context, CL_MEM_READ_WRITE, newsize * sizeof(COMPLEX_FLOAT), NULL, &ret);
     CheckErr(ret, "CreateBuffer: ");
     
-    ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_uint), &multiplier, 0, NULL, NULL);
+    ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_uint), &multiplier, 0, NULL, NULL); 
 
     cl_kernel kernel = clCreateKernel(program, "kronecker", &ret);
 	CheckErr(ret, "CreateKernel, line 90: ");
@@ -178,6 +179,7 @@ cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t siz
     CheckErr(ret, "KroSetKernelArg3, line 99: ");
 
     ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &newsize, &size2, 0, NULL, NULL);
+    ret = clFinish(command_queue);
 	CheckErr(ret, "Kro.EnqueueNDRangeKernel, line 106: ");
   /*
     int qubits = Log2(newsize);
@@ -192,10 +194,13 @@ cl_mem parralel_kronecker(cl_mem qureg1, cl_mem qureg2, size_t size1, size_t siz
 }
 
 void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position) {
+  
+  clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);  
 
+    
   size_t groupSize = size>max_group ? max_group : size;
   cl_int target = 1 << qubit_position;
-
+  
    
   ret = clEnqueueWriteBuffer(command_queue, target_buffer, CL_TRUE, 0, sizeof(cl_int), &target, 0, NULL, NULL);  
   CheckErr(ret, "WriteBuffer_X:" ); 
@@ -208,19 +213,20 @@ void parralel_quantum_X(cl_mem input_buffer, size_t size, cl_uint qubit_position
   CheckErr(ret, "SetKernelArg: ");
   ret = clSetKernelArg(kernel, 2, size * sizeof(COMPLEX_FLOAT), NULL);
   CheckErr(ret, "SetKernelArg, line 99: ");
-  ret = clSetKernelArg(kernel, 3, size * sizeof(COMPLEX_FLOAT), NULL);
-  CheckErr(ret, "SetKernelArg, line 99: ");
 
    
 
   ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &groupSize, 0, NULL, NULL);
-  CheckErr(ret, "X.EnqueueNDRangeKernel, line 106: ");
+  ret = clFinish(command_queue);
+  CheckErr(ret, "X.EnqueueNDRangeKernel: ");
 
   ret = clReleaseKernel(kernel);
 }
 
 void parralel_quantum_Z(cl_mem input_buffer, size_t size, int qubit_position) {
     
+    clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);
+
     size_t groupSize = size>max_group ? max_group : size;
     
     cl_int target = 1 << qubit_position;
@@ -234,13 +240,16 @@ void parralel_quantum_Z(cl_mem input_buffer, size_t size, int qubit_position) {
     ret = clSetKernelArg(kernel, 1 , sizeof(cl_mem), (void*)&target_buffer);
     CheckErr(ret, "SetKernelArg");
 
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &size, 0, NULL, NULL);
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &groupSize, 0, NULL, NULL);
+    ret = clFinish(command_queue);
     CheckErr(ret, "Z.EnqueueNDRangeKernel: ");
 
     ret = clReleaseKernel(kernel);
 }
 
 void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int qid2) {
+
+   clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL);
 
    size_t groupSize = size>max_group ? max_group : size;
     
@@ -258,6 +267,7 @@ void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int q
     CheckErr(ret, "SetKernelArg");
 
     ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &size, &groupSize, 0, NULL, NULL);
+    ret = clFinish(command_queue);
     CheckErr(ret, "CZ.EnqueueNDRangeKernel: ");
 
 
@@ -267,6 +277,8 @@ void parralel_quantum_CZ(cl_mem input_buffer, size_t size, cl_int qid1, cl_int q
 cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, cl_int qubits)
 {
   
+
+  clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_group), &max_group, NULL); 
   size_t size = 1 << (qubits-1);
   
   size_t groupSize = size>max_group ? max_group : size;
@@ -331,6 +343,7 @@ cl_mem parralel_diag_measure(cl_mem input_buffer, cl_int pos, cl_double angle, c
   ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void*)&angle_buffer);
   CheckErr(ret, "m.SetArg3");
   ret = clEnqueueNDRangeKernel(command_queue, kernel, 1 , NULL, &size, &groupSize, 0, NULL, NULL);
+  ret = clFinish(command_queue);
   CheckErr(ret, "M.EnqueueNDRangeKernel");
   //ret = clEnqueueReadBuffer(command_queue, args_buffer, CL_TRUE, 0, 3 * sizeof(cl_double), args, 0 , NULL, NULL);
   //printf("\ntest⁴: %f %f %f\n", args[0], args[1], args[2]);
@@ -414,12 +427,12 @@ void print_tangle( const tangle_t* restrict tangle ) {
   assert( tangle );
   print_qids( tangle->qids );
   printf(" ,\n    {\n");
-  if( tangle->qureg.size > 32 ) {
-    printf("<a large quantum state>, really print? (y/N): ");
+ // if( tangle->qureg.size > 32 ) {
+ //   printf("<a large quantum state>, really print? (y/N): ");
     /* if( getchar() == 'y' ) */
     /*   quantum_print_qureg( tangle->qureg ); */
-  }
-  else
+//  }
+ // else
     quantum_print_qureg( tangle->qureg );
   printf("}");
 }
@@ -597,8 +610,8 @@ void print_qmem( const qmem_t* restrict qmem ) {
     }
   }
   printf("}\n");
-  printf("signal map:");
-  print_signal_map( &qmem->signal_map );
+ // printf("signal map:");
+ // print_signal_map( &qmem->signal_map );
 }
 
 qmem_t* init_qmem() {
@@ -617,7 +630,7 @@ qmem_t* init_qmem() {
   _proto_dual_diag_qubit_ = quantum_new_qureg(2);
   general_quantum_CZ(0, 1, &_proto_dual_diag_qubit_);
 
-  quantum_reg test = quantum_new_qureg(3);
+  /*quantum_reg test = quantum_new_qureg(3);
   COMPLEX_FLOAT a = {0,0};
   COMPLEX_FLOAT b = {1,0};
   COMPLEX_FLOAT c = {2,0};
@@ -645,7 +658,7 @@ qmem_t* init_qmem() {
   quantum_reg output = buffer_to_qureg(test_buffer, 3);
 
   quantum_print_qureg(output);
-
+  */
   srand(time(0));
   return qmem;
 
@@ -1527,51 +1540,15 @@ const tangle_t* fetch_first_tangle( const qmem_t* restrict qmem ) {
    also produces 0's */
 void 
 produce_output_file( const char* output_file, 
-		     const qmem_t* restrict qmem ) {
-  CSTRING* out = snew(STRING_SIZE); 
-  char str[STRING_SIZE];
+		             int idx ) {
   //  int count=0;
-  quantum_reg reg;
-  const tangle_t* tangle = fetch_first_tangle(qmem);
-  assert( tangle );
   assert( output_file );
-  saddch(out,'(');
-  // print qids
-  saddch(out, '(');
-  for( const qid_list_t* cons = tangle->qids;
-       cons;
-       cons=cons->rest ) {
-    sprintf(str,"%d", cons->qid);
-    sadd(out, str);
-    if( cons->rest )
-      saddch(out, ' ');
-  }
-  // end qids
-  sadd(out, ")\n ");
-
-  // print (basis amplitude)
-  saddch(out, '(');
-  reg = tangle->qureg;
-  for( int i=0; i<reg.size; ++i ) {
-    sprintf(str,"(%lli ", i);
-    sadd(out, str);
-    sprintf( str, "% .12g%+.12gi)", 
-	     real(reg.amplitudes[i]),
-	     imag(reg.amplitudes[i]) );
-    sadd(out, str);
-    if( i+1<reg.size )
-      sadd(out, "\n  ");
-  }
-  // end amplitudes
-  saddch(out, ')');
-  saddch(out, ')');
-  saddch(out, '\n');
-  FILE* file = fopen(output_file, "w");
-  fputs(toCharPtr(out), file);
+  double time = (end - start) / 1000.0;
+  FILE* file = fopen(output_file, "a+");
+  fprintf( file, "%u, %0.3f \n", idx, time);
   fclose(file);
-  sdestroy(out);
-}
 
+}
 void initialize_input_state( const char* input_file, qmem_t* qmem ) {
   if( input_file == NULL )
     return;
@@ -1613,12 +1590,13 @@ int main(int argc, char* argv[]) {
   int interactive = 0;
   int silent = 0;
   char* output_file = NULL;
+  int output_file_idx = 0;
   int program_fd;
   int c;
      
   opterr = 0;
     
-  while ((c = getopt (argc, argv, "isvmf:o::")) != -1)
+  while ((c = getopt (argc, argv, "isvmft:o::")) != -1)
     switch (c)
       {
       case 'i':
@@ -1639,6 +1617,9 @@ int main(int argc, char* argv[]) {
       case 'o':
 	output_file = optarg;
 	break;
+      case 't':
+    output_file_idx = atoi(optarg);
+    break;
       case '?':
 	if (optopt == 'f')
 	  fprintf (stderr, "Option -%c requires an argument.\n", optopt);
@@ -1695,9 +1676,11 @@ int main(int argc, char* argv[]) {
     
     eval( mc_program->list, qmem );
   }
+  
+
 
   //get information back from buffers to the quregs
-  
+  clFinish(command_queue);
   tangle_t* tangle = NULL;
   for(int t=0; t <qmem->size;t++) {
     tangle = qmem->tangles[t];
@@ -1717,7 +1700,6 @@ int main(int argc, char* argv[]) {
       ++tally;
     }
   }
-
   end = PAPI_get_real_usec();
   
   if (!silent) {
@@ -1726,10 +1708,9 @@ int main(int argc, char* argv[]) {
     printf("Total execution time in ms = %0.3f \n", (end - start) / 1000.0 );
 
   }
-
-  if( output_file ) {
-    produce_output_file(output_file, qmem);
-  }
+  if (output_file_idx > 0)
+    produce_output_file("output2.csv", output_file_idx) ;
+  
   
   destroy_iowrap( input_port );
   sdestroy( str );

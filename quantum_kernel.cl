@@ -88,7 +88,7 @@ inline COMPLEX_FLOAT quantum_cexp(double phi)
 __kernel void kronecker(__global COMPLEX_FLOAT * result,
                         __global COMPLEX_FLOAT * input1,
                         __global COMPLEX_FLOAT * input2,
-                        __global uint * multiplier)
+                        __constant uint * multiplier)
 {
 
     int gl_id = get_global_id(0);
@@ -105,24 +105,16 @@ __kernel void kronecker(__global COMPLEX_FLOAT * result,
             int offset = (i * loc_id) + loc_id; 
             result[gl_id]=cmult(input1[gr_id],input2[offset]);
             i++;
-            barrier(CLK_LOCAL_MEM_FENCE);
-
         }
 
     }
 }
 
 
-uint permute(const uint i, const uint pos, const uint size) {
-  const uint rest = size / pos;
-  return ( i % pos ) * rest + i / pos; 
-}
-
 
 __kernel void quantum_X(__global COMPLEX_FLOAT * input,
-                        __global uint * target,
-                        __local COMPLEX_FLOAT * input_permut,
-                        __local COMPLEX_FLOAT * output_permut
+                        __constant uint * target,
+                        __local COMPLEX_FLOAT * input_permut
                         )
 {
  
@@ -138,34 +130,31 @@ __kernel void quantum_X(__global COMPLEX_FLOAT * input,
  }
 
 __kernel void quantum_Z(__global COMPLEX_FLOAT * input,
-                        __global int * target)
+                        __constant uint * target)
 {
    int gl_id = get_global_id(0);
    int size = get_global_size(0);
    COMPLEX_FLOAT mult = {-1,0};
-   int p_i = permute(gl_id, target[0], size);
-   if (p_i % 2 == 1) 
+   if (gl_id & target[0]) 
     input[gl_id] = cmult(input[gl_id], mult);
 
 }
 
 __kernel void quantum_CZ(__global COMPLEX_FLOAT * input,
-                         __global int * target)
+                         __constant int * target)
 {
     int global_id = get_global_id(0);
     COMPLEX_FLOAT mult = {-1,0};
     if ((global_id & target[0]) == target[0])
-    {
         input[global_id] = cmult(input[global_id], mult);
-    }
 
 
 }
 
 __kernel void quantum_diag_measure(__global COMPLEX_FLOAT * input,
                                    __global COMPLEX_FLOAT * output,
-                                   __global uint * args,
-                                   __global double * angle)
+                                   __constant uint * args,
+                                   __constant double * angle)
 {
 
  int global_id = get_global_id(0);
